@@ -2,3 +2,6 @@ This Project was developed to showcase my skills in building E-commerce websites
 
 Technologies used:
 MERN STACK  [ Mongo DB, Express Js, React Js, Node Js]
+
+Project Screenshots - 
+https://github.com/dexter747/Clothes-Store-ECommerce/blob/master/Screenshot%202024-12-06%20005933.png
