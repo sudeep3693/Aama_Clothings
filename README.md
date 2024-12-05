@@ -9,3 +9,5 @@ https://github.com/dexter747/Clothes-Store-ECommerce/blob/master/Screenshot%2020
 https://github.com/dexter747/Clothes-Store-ECommerce/blob/master/Screenshot%202024-12-06%20010437.png
 
 https://github.com/dexter747/Clothes-Store-ECommerce/blob/master/Screenshot%202024-12-06%20010909.png
+
+https://github.com/dexter747/Clothes-Store-ECommerce/blob/master/Screenshot%202024-12-06%20011217.png
