@@ -4,10 +4,19 @@ Technologies used:
 MERN STACK  [ Mongo DB, Express Js, React Js, Node Js]
 
 Project Screenshots - 
-https://github.com/dexter747/Clothes-Store-ECommerce/blob/master/Screenshot%202024-12-06%20005933.png
 
-https://github.com/dexter747/Clothes-Store-ECommerce/blob/master/Screenshot%202024-12-06%20010437.png
+# Clothes Store E-Commerce
 
-https://github.com/dexter747/Clothes-Store-ECommerce/blob/master/Screenshot%202024-12-06%20010909.png
+## Screenshots
 
-https://github.com/dexter747/Clothes-Store-ECommerce/blob/master/Screenshot%202024-12-06%20011217.png
+### Homepage
+![Homepage](https://raw.githubusercontent.com/dexter747/Clothes-Store-ECommerce/master/Screenshot%202024-12-06%20005933.png)
+
+### Product Page
+![Product Page](https://raw.githubusercontent.com/dexter747/Clothes-Store-ECommerce/master/Screenshot%202024-12-06%20010437.png)
+
+### Cart Page
+![Cart Page](https://raw.githubusercontent.com/dexter747/Clothes-Store-ECommerce/master/Screenshot%202024-12-06%20010909.png)
+
+### Checkout Page
+![Checkout Page](https://raw.githubusercontent.com/dexter747/Clothes-Store-ECommerce/master/Screenshot%202024-12-06%20011217.png)
