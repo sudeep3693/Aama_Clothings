@@ -14,8 +14,7 @@ Project Screenshots -
 
 ![Product Page](https://github.com/dexter747/Clothes-Store-ECommerce/blob/master/Screenshot%202024-12-06%20010437.png)
 
-### Cart Page
-![Cart Page](https://raw.githubusercontent.com/dexter747/Clothes-Store-ECommerce/master/Screenshot%202024-12-06%20010909.png)
+![Cart Page](https://github.com/dexter747/Clothes-Store-ECommerce/blob/master/Screenshot%202024-12-06%20010909.png)
 
 ### Checkout Page
 ![Checkout Page](https://raw.githubusercontent.com/dexter747/Clothes-Store-ECommerce/master/Screenshot%202024-12-06%20011217.png)
