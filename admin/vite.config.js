@@ -5,4 +5,7 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   server: { port: 5174 },
+  define: {
+    "import.meta.env.VITE_BACKEND_URL": JSON.stringify("http://localhost:4000"),
+  },
 });
