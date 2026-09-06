@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       String @id @default(uuid())
+  name     String
+  email    String @unique
+  password String
+  cartData Json   @default("{}")
+}
+
+model Product {
+  id          String  @id @default(uuid())
+  name        String
+  description String  @db.Text
+  price       Float
+  image       Json
+  category    String
+  subCategory String
+  sizes       Json
+  bestseller  Boolean @default(false)
+  date        BigInt
+}
+
+model Order {
+  id            String  @id @default(uuid())
+  userId        String
+  items         Json
+  amount        Float
+  address       Json
+  status        String  @default("Order Placed")
+  paymentMethod String
+  payment       Boolean @default(false)
+  date          BigInt
+}

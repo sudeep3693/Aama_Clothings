@@ -1,5 +1,5 @@
 import { v2 as cloudinary } from "cloudinary";
-import productModel from "../models/productModel.js";
+import { prisma } from "../config/db.js";
 
 // function for add product
 const addProduct = async (req, res) => {
@@ -40,13 +40,12 @@ const addProduct = async (req, res) => {
       subCategory,
       sizes: JSON.parse(sizes),
       image: imagesUrl,
-      bestseller: bestseller === "true" ? true : false,
-      date: Date.now(),
+      bestseller: bestseller === "true" || bestseller === true ? true : false,
+      date: BigInt(Date.now()),
     };
 
     console.log(productData);
-    const product = new productModel(productData);
-    await product.save();
+    await prisma.product.create({ data: productData });
 
     res.json({ success: true, message: "Product Added" });
   } catch (error) {
@@ -58,7 +57,12 @@ const addProduct = async (req, res) => {
 // function for list product
 const listProducts = async (req, res) => {
   try {
-    const products = await productModel.find({});
+    const rawProducts = await prisma.product.findMany({});
+    const products = rawProducts.map((item) => ({
+      ...item,
+      _id: item.id,
+      date: Number(item.date),
+    }));
     res.json({ success: true, products });
   } catch (error) {
     console.log(error);
@@ -69,7 +73,10 @@ const listProducts = async (req, res) => {
 // function for removing product
 const removeProduct = async (req, res) => {
   try {
-    await productModel.findByIdAndDelete(req.body.id);
+    const { id } = req.body;
+    await prisma.product.delete({
+      where: { id: id },
+    });
     res.json({ success: true, message: "Product Removed" });
   } catch (error) {
     console.log(error);
@@ -81,8 +88,18 @@ const removeProduct = async (req, res) => {
 const singleProduct = async (req, res) => {
   try {
     const { productId } = req.body;
-    const product = await productModel.findById(productId);
-    res.json({ succes: true, product });
+    const rawProduct = await prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!rawProduct) {
+      return res.json({ success: false, message: "Product not found" });
+    }
+    const product = {
+      ...rawProduct,
+      _id: rawProduct.id,
+      date: Number(rawProduct.date),
+    };
+    res.json({ success: true, product });
   } catch (error) {
     console.log(error);
     res.json({ success: false, message: error.message });

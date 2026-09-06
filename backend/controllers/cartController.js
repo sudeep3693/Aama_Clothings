@@ -1,11 +1,15 @@
-import userModel from "../models/userModel.js";
+import { prisma } from "../config/db.js";
 
 // add products to user cart
 const addToCart = async (req, res) => {
   try {
     const { userId, itemId, size } = req.body;
-    const userData = await userModel.findById(userId);
-    let cartData = await userData.cartData;
+    const userData = await prisma.user.findUnique({ where: { id: userId } });
+    if (!userData) {
+      return res.json({ success: false, message: "User not found" });
+    }
+
+    let cartData = structuredClone(userData.cartData || {});
     if (cartData[itemId]) {
       if (cartData[itemId][size]) {
         cartData[itemId][size] += 1;
@@ -17,7 +21,10 @@ const addToCart = async (req, res) => {
       cartData[itemId][size] = 1;
     }
 
-    await userModel.findByIdAndUpdate(userId, { cartData });
+    await prisma.user.update({
+      where: { id: userId },
+      data: { cartData },
+    });
     res.json({ success: true, message: "Added To Cart" });
   } catch (error) {
     console.log(error);
@@ -29,12 +36,21 @@ const addToCart = async (req, res) => {
 const updateCart = async (req, res) => {
   try {
     const { userId, itemId, size, quantity } = req.body;
-    const userData = await userModel.findById(userId);
-    let cartData = await userData.cartData;
+    const userData = await prisma.user.findUnique({ where: { id: userId } });
+    if (!userData) {
+      return res.json({ success: false, message: "User not found" });
+    }
 
+    let cartData = structuredClone(userData.cartData || {});
+    if (!cartData[itemId]) {
+      cartData[itemId] = {};
+    }
     cartData[itemId][size] = quantity;
 
-    await userModel.findByIdAndUpdate(userId, { cartData });
+    await prisma.user.update({
+      where: { id: userId },
+      data: { cartData },
+    });
     res.json({ success: true, message: "Cart Updated" });
   } catch (error) {
     console.log(error);
@@ -46,8 +62,11 @@ const updateCart = async (req, res) => {
 const getUserCart = async (req, res) => {
   try {
     const { userId } = req.body;
-    const userData = await userModel.findById(userId);
-    let cartData = await userData.cartData;
+    const userData = await prisma.user.findUnique({ where: { id: userId } });
+    if (!userData) {
+      return res.json({ success: false, message: "User not found" });
+    }
+    let cartData = userData.cartData || {};
 
     res.json({ success: true, cartData });
   } catch (error) {

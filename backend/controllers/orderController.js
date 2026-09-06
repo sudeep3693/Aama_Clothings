@@ -1,5 +1,4 @@
-import orderModel from "../models/orderModel.js";
-import userModel from "../models/userModel.js";
+import { prisma } from "../config/db.js";
 
 // global variables
 const currency = "inr";
@@ -12,17 +11,19 @@ const placeOrder = async (req, res) => {
     const orderData = {
       userId,
       items,
-      amount,
+      amount: Number(amount),
       paymentMethod: "COD",
       payment: false,
-      date: Date.now(),
+      date: BigInt(Date.now()),
       address,
     };
 
-    const newOrder = new orderModel(orderData);
-    await newOrder.save();
+    await prisma.order.create({ data: orderData });
 
-    await userModel.findByIdAndUpdate(userId, { cartData: {} });
+    await prisma.user.update({
+      where: { id: userId },
+      data: { cartData: {} },
+    });
     res.json({ success: true, message: "Order Placed" });
 
   } catch (error) {
@@ -34,7 +35,12 @@ const placeOrder = async (req, res) => {
 // All Orders data for Admin Panel
 const allOrders = async (req, res) => {
   try {
-    const orders = await orderModel.find({});
+    const rawOrders = await prisma.order.findMany({});
+    const orders = rawOrders.map((item) => ({
+      ...item,
+      _id: item.id,
+      date: Number(item.date),
+    }));
     res.json({ success: true, orders });
   } catch (error) {
     console.log(error);
@@ -46,7 +52,12 @@ const allOrders = async (req, res) => {
 const userOrders = async (req, res) => {
   try {
     const { userId } = req.body;
-    const orders = await orderModel.find({ userId });
+    const rawOrders = await prisma.order.findMany({ where: { userId } });
+    const orders = rawOrders.map((item) => ({
+      ...item,
+      _id: item.id,
+      date: Number(item.date),
+    }));
     res.json({ success: true, orders });
   } catch (error) {
     console.log(error);
@@ -58,7 +69,10 @@ const userOrders = async (req, res) => {
 const updateStatus = async (req, res) => {
   try {
     const { orderId, status } = req.body;
-    await orderModel.findByIdAndUpdate(orderId, { status });
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { status },
+    });
     res.json({ success: true, message: "Status Updated" });
   } catch (error) {
     console.log(error);
