@@ -15,6 +15,7 @@ const Add = ({ token }) => {
   const [name, setName] = useState("");
   const [description, setDesription] = useState("");
   const [price, setPrice] = useState("");
+  const [discount, setDiscount] = useState("");
   const [category, setCategory] = useState("Men");
   const [subCategory, setSubCategory] = useState("Topwear");
   const [bestseller, setBestSeller] = useState(false);
@@ -27,6 +28,7 @@ const Add = ({ token }) => {
       formData.append("name", name);
       formData.append("description", description);
       formData.append("price", price);
+      formData.append("discount", discount);
       formData.append("category", category);
       formData.append("subCategory", subCategory);
       formData.append("bestseller", bestseller);
@@ -52,6 +54,7 @@ const Add = ({ token }) => {
         setImage3(false);
         setImage4(false);
         setPrice("");
+        setDiscount("");
       } else {
         toast.error(response.data.message);
       }
@@ -177,6 +180,19 @@ const Add = ({ token }) => {
             className="w-full px-3 py-2 sm:w-[120px]"
             type="Number"
             placeholder="25"
+            required
+          />
+        </div>
+        <div>
+          <p className="mb-2">Discount (%)</p>
+          <input
+            onChange={(e) => setDiscount(e.target.value)}
+            value={discount}
+            className="w-full px-3 py-2 sm:w-[120px]"
+            type="Number"
+            placeholder="0"
+            min="0"
+            max="100"
           />
         </div>
       </div>

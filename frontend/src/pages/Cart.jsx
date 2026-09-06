@@ -55,9 +55,20 @@ const Cart = () => {
                     {productData.name}
                   </p>
                   <div className="flex items-center gap-5 mt-2">
-                    <p>
-                      {currency} {productData.price}
-                    </p>
+                    {productData.discount > 0 ? (
+                      <p className="flex items-center gap-2">
+                        <span className="font-semibold text-red-600">
+                          {currency}{Math.round(productData.price * (1 - productData.discount / 100))}
+                        </span>
+                        <span className="text-xs text-gray-400 line-through">
+                          {currency}{productData.price}
+                        </span>
+                      </p>
+                    ) : (
+                      <p>
+                        {currency} {productData.price}
+                      </p>
+                    )}
                     <p className="px-2 sm:px-3 sm:py-1 border bg-slate-50">
                       {item.size}
                     </p>

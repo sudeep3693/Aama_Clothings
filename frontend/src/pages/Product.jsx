@@ -58,10 +58,24 @@ const Product = () => {
             <img className="w-3 5" src={assets.star_dull_icon} alt="" />
             <p className="pl-2">(122)</p>
           </div>
-          <p className="ms-5 text-3xl font-medium">
-            {currency}
-            {productData.price}
-          </p>
+          {productData.discount > 0 ? (
+            <div className="flex items-center gap-3 mt-4">
+              <span className="text-3xl font-bold text-red-600">
+                {currency}{Math.round(productData.price * (1 - productData.discount / 100))}
+              </span>
+              <span className="text-xl text-gray-400 line-through">
+                {currency}{productData.price}
+              </span>
+              <span className="bg-red-100 text-red-600 text-sm font-semibold px-2.5 py-1 rounded">
+                {productData.discount}% OFF
+              </span>
+            </div>
+          ) : (
+            <p className="mt-4 text-3xl font-medium">
+              {currency}
+              {productData.price}
+            </p>
+          )}
           <p className="mt-5 text-gray-500 md:w-4/5">
             {productData.description}
           </p>

@@ -69,8 +69,15 @@ const List = ({ token }) => {
             <p>{item.name}</p>
             <p>{item.category}</p>
             <p>
-              {currency}
-              {item.price}
+              {item.discount > 0 ? (
+                <span>
+                  {currency}{Math.round(item.price * (1 - item.discount / 100))}{" "}
+                  <span className="line-through text-xs text-gray-400">{currency}{item.price}</span>{" "}
+                  <span className="text-xs text-red-500 font-semibold">({item.discount}% off)</span>
+                </span>
+              ) : (
+                `${currency}${item.price}`
+              )}
             </p>
             <p
               onClick={() => removeProduct(item._id)}

@@ -25,6 +25,7 @@ model Product {
   subCategory String
   sizes       Json
   bestseller  Boolean @default(false)
+  discount    Float   @default(0)
   date        BigInt
 }
 
