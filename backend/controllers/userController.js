@@ -266,6 +266,84 @@ const deleteUserAddress = async (req, res) => {
   }
 };
 
+// Route for updating user profile (name, phone only — email is immutable)
+const updateUserProfile = async (req, res) => {
+  try {
+    const { userId, firstName, lastName, phone } = req.body;
+
+    let fName = (firstName || "").trim();
+    let lName = (lastName || "").trim();
+
+    if (!fName) return res.json({ success: false, message: "First name is required" });
+    if (!lName) return res.json({ success: false, message: "Last name is required" });
+
+    if (phone && phone.trim().length > 0 && phone.trim().length < 7) {
+      return res.json({ success: false, message: "Please enter a valid phone number" });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        firstName: fName,
+        lastName: lName,
+        name: fName.concat(" ").concat(lName),
+        phone: phone ? phone.trim() : "",
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "Profile updated successfully",
+      user: {
+        id: updatedUser.id,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        phone: updatedUser.phone || "",
+      },
+    });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// Route for changing user password (current password must match)
+const changePassword = async (req, res) => {
+  try {
+    const { userId, currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.json({ success: false, message: "Both current and new password are required" });
+    }
+    if (newPassword.length < 8) {
+      return res.json({ success: false, message: "New password must be at least 8 characters" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return res.json({ success: false, message: "User not found" });
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.json({ success: false, message: "Current password is incorrect" });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    res.json({ success: true, message: "Password changed successfully" });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
 // Route for admin login
 const adminLogin = async (req, res) => {
   try {
@@ -289,6 +367,8 @@ export {
   loginUser,
   registerUser,
   getUserProfile,
+  updateUserProfile,
+  changePassword,
   saveUserAddress,
   deleteUserAddress,
   adminLogin,

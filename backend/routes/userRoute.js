@@ -3,6 +3,8 @@ import {
   loginUser,
   registerUser,
   getUserProfile,
+  updateUserProfile,
+  changePassword,
   saveUserAddress,
   deleteUserAddress,
   adminLogin,
@@ -17,6 +19,8 @@ userRouter.post("/admin", adminLogin);
 
 // Customer Authenticated Routes
 userRouter.get("/profile", authUser, getUserProfile);
+userRouter.post("/profile/update", authUser, updateUserProfile);
+userRouter.post("/password/change", authUser, changePassword);
 userRouter.post("/address/save", authUser, saveUserAddress);
 userRouter.post("/address/delete", authUser, deleteUserAddress);
 

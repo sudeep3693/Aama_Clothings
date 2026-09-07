@@ -55,18 +55,23 @@ const PlaceOrder = () => {
   // Dynamic delivery fee - recalculated when city changes
   const [dynamicDeliveryFee, setDynamicDeliveryFee] = useState(delivery_fee);
   const [shippingTierLabel, setShippingTierLabel] = useState("");
+  const [loyaltyData, setLoyaltyData] = useState(null);
+  const [loyaltyDiscountAmount, setLoyaltyDiscountAmount] = useState(0);
+  const [loyaltyDiscountLabel, setLoyaltyDiscountLabel] = useState("");
+  const [loyaltyGiftInfo, setLoyaltyGiftInfo] = useState(null); // { amount, description, letterIncluded, customPerk }
 
-  // Fetch logged-in user profile & saved addresses
+  // Fetch logged-in user profile & saved addresses & loyalty status
   const fetchUserProfile = async () => {
     if (!token) return;
     try {
       setLoadingProfile(true);
-      const res = await axios.get(`${backendUrl}/api/user/profile`, {
-        headers: { token },
-      });
+      const [profRes, loyRes] = await Promise.all([
+        axios.get(`${backendUrl}/api/user/profile`, { headers: { token } }),
+        axios.get(`${backendUrl}/api/loyalty/my-status`, { headers: { token } }),
+      ]);
 
-      if (res.data.success && res.data.user) {
-        const u = res.data.user;
+      if (profRes.data.success && profRes.data.user) {
+        const u = profRes.data.user;
         const addresses = u.addresses || [];
         setSavedAddresses(addresses);
 
@@ -98,8 +103,12 @@ const PlaceOrder = () => {
           }));
         }
       }
+
+      if (loyRes.data.success && loyRes.data.loyalty) {
+        setLoyaltyData(loyRes.data.loyalty);
+      }
     } catch (err) {
-      console.error("Error fetching user profile:", err);
+      console.error("Error fetching user profile & loyalty:", err);
     } finally {
       setLoadingProfile(false);
     }
@@ -109,22 +118,71 @@ const PlaceOrder = () => {
     fetchUserProfile();
   }, [token]);
 
-  // Recalculate fee whenever city or shippingConfig changes
+  // Recalculate fee & loyalty rewards whenever city, shippingConfig or loyalty changes
   useEffect(() => {
     const subtotal = getCartAmount();
-    const fee = calculateDeliveryFee(formData.city, subtotal);
-    setDynamicDeliveryFee(fee);
+    let fee = calculateDeliveryFee(formData.city, subtotal);
     const baseCity = shippingConfig?.baseCity || "Kathmandu";
     const isLocal = (formData.city || "").trim().toLowerCase() === baseCity.trim().toLowerCase();
     const freeMin = Number(shippingConfig?.freeShippingMin || 0);
-    if (freeMin > 0 && subtotal >= freeMin) {
-      setShippingTierLabel("🎁 Free Delivery (Order above Rs. " + freeMin + ")");
-    } else if (isLocal) {
-      setShippingTierLabel(`🏠 Inside ${baseCity}`);
-    } else {
-      setShippingTierLabel(`🚚 Outside ${baseCity}`);
+
+    // ---- Modular loyalty reward resolution ----
+    let isLoyaltyFreeShipping = false;
+    let discAmount = 0;
+    let discLabel = "";
+    let giftInfo = null;
+
+    if (loyaltyData?.activeReward?.isEligible) {
+      const act = loyaltyData.activeReward;
+      const lvl = loyaltyData.currentLevel;
+      const usageText = `Use ${act.currentUseIndex} of ${act.orderLimit}`;
+
+      // Free Delivery
+      if (act.freeShipping) {
+        isLoyaltyFreeShipping = true;
+        fee = 0;
+        setShippingTierLabel(
+          `🎁 Free Delivery · ${lvl.badgeIcon} ${lvl.name} (${usageText})`
+        );
+      }
+
+      // Price Discount
+      if (Number(act.discountAmount) > 0) {
+        discAmount = Math.min(subtotal, Number(act.discountAmount));
+        const parts = [];
+        if (act.freeShipping) parts.push("Free Delivery");
+        parts.push(`Rs. ${discAmount} Off`);
+        discLabel = `${lvl.badgeIcon} ${lvl.name} · ${parts.join(" + ")} (${usageText})`;
+      } else if (act.freeShipping) {
+        discLabel = `${lvl.badgeIcon} ${lvl.name} · Free Delivery (${usageText})`;
+      }
+
+      // Gift / Letter / Custom Perk
+      if (act.giftAmount > 0 || act.giftDescription || act.letterIncluded || act.customPerk) {
+        giftInfo = {
+          amount: Number(act.giftAmount || 0),
+          description: act.giftDescription || "",
+          letterIncluded: Boolean(act.letterIncluded),
+          customPerk: act.customPerk || "",
+        };
+      }
     }
-  }, [formData.city, shippingConfig, cartItems]);
+
+    if (!isLoyaltyFreeShipping) {
+      if (freeMin > 0 && subtotal >= freeMin) {
+        setShippingTierLabel("🎁 Free Delivery (Order above Rs. " + freeMin + ")");
+      } else if (isLocal) {
+        setShippingTierLabel(`🏠 Inside ${baseCity}`);
+      } else {
+        setShippingTierLabel(`🚚 Outside ${baseCity}`);
+      }
+    }
+
+    setDynamicDeliveryFee(fee);
+    setLoyaltyDiscountAmount(discAmount);
+    setLoyaltyDiscountLabel(discLabel);
+    setLoyaltyGiftInfo(giftInfo);
+  }, [formData.city, shippingConfig, cartItems, loyaltyData]);
 
   const onChangeHandler = (event) => {
     const { name, value } = event.target;
@@ -550,8 +608,109 @@ const PlaceOrder = () => {
         <div className="flex-1 lg:max-w-[420px] flex flex-col justify-between">
           <div>
             <div className="min-w-full">
-              {/* Dynamic Shipping Rate Badge */}
-              {shippingTierLabel && (
+
+              {/* ===== VIP LOYALTY REWARD BANNER ===== */}
+              {loyaltyData?.activeReward?.isEligible && (
+                <div className="mb-4 rounded-2xl overflow-hidden border border-amber-300 shadow-sm">
+                  {/* Banner Header */}
+                  <div
+                    className="px-4 py-2.5 flex items-center gap-2.5"
+                    style={{
+                      background: `linear-gradient(135deg, #1a1a2e 0%, ${loyaltyData.currentLevel?.color || "#F59E0B"} 100%)`,
+                    }}
+                  >
+                    <span className="text-xl">{loyaltyData.currentLevel?.badgeIcon || "⭐"}</span>
+                    <div className="flex-1">
+                      <p className="text-white font-black text-xs tracking-wide">
+                        🎁 VIP REWARD APPLIED — {loyaltyData.currentLevel?.name}
+                      </p>
+                      <p className="text-white/70 text-[11px]">
+                        {loyaltyData.activeReward.title} · Use {loyaltyData.activeReward.currentUseIndex} of {loyaltyData.activeReward.orderLimit}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-extrabold bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full">
+                      ACTIVE
+                    </span>
+                  </div>
+
+                  {/* Perk Pills */}
+                  <div className="bg-amber-50 px-4 py-3 flex flex-col gap-2">
+                    {/* Free Delivery Perk */}
+                    {loyaltyData.activeReward.freeShipping && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-sm flex-shrink-0">🚚</span>
+                        <div className="flex-1">
+                          <span className="font-bold text-emerald-800">Free Delivery</span>
+                          <span className="text-emerald-600 ml-1 font-semibold">— courier fee waived on this order</span>
+                        </div>
+                        <span className="font-black text-emerald-700 text-sm">FREE</span>
+                      </div>
+                    )}
+
+                    {/* Price Discount Perk */}
+                    {Number(loyaltyData.activeReward.discountAmount) > 0 && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-sm flex-shrink-0">🏷️</span>
+                        <div className="flex-1">
+                          <span className="font-bold text-rose-800">Price Discount</span>
+                          <span className="text-rose-600 ml-1">— deducted from your total</span>
+                        </div>
+                        <span className="font-black text-rose-700 text-sm">- Rs. {Math.min(getCartAmount(), Number(loyaltyData.activeReward.discountAmount))}</span>
+                      </div>
+                    )}
+
+                    {/* Gift Voucher / Item Perk */}
+                    {(Number(loyaltyData.activeReward.giftAmount) > 0 || loyaltyData.activeReward.giftDescription) && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-sm flex-shrink-0">🎁</span>
+                        <div className="flex-1">
+                          <span className="font-bold text-indigo-800">Special Gift Included</span>
+                          {loyaltyData.activeReward.giftDescription && (
+                            <p className="text-indigo-600 text-[11px] mt-0.5">{loyaltyData.activeReward.giftDescription}</p>
+                          )}
+                        </div>
+                        {Number(loyaltyData.activeReward.giftAmount) > 0 && (
+                          <span className="font-black text-indigo-700 text-sm">Rs. {loyaltyData.activeReward.giftAmount}</span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Handwritten Letter */}
+                    {loyaltyData.activeReward.letterIncluded && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center text-sm flex-shrink-0">💌</span>
+                        <span className="font-bold text-violet-800">Handwritten Thank-You Letter</span>
+                        <span className="text-violet-600 ml-auto text-[10px] font-semibold">Included</span>
+                      </div>
+                    )}
+
+                    {/* Custom VIP Perk */}
+                    {loyaltyData.activeReward.customPerk && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-sm flex-shrink-0">✨</span>
+                        <span className="font-bold text-amber-800">{loyaltyData.activeReward.customPerk}</span>
+                      </div>
+                    )}
+
+                    {/* Remaining Uses Notice */}
+                    <div className="mt-1 pt-2 border-t border-amber-200 flex items-center justify-between">
+                      <p className="text-[10px] text-amber-700 font-semibold">
+                        ⏳ {loyaltyData.activeReward.remainingUses - 1 > 0
+                          ? `${loyaltyData.activeReward.remainingUses - 1} more reward order(s) remaining after this`
+                          : `This is your last reward order for this level`
+                        }
+                      </p>
+                      <span className="text-[10px] font-bold text-amber-900 bg-amber-200 px-1.5 py-0.5 rounded">
+                        {loyaltyData.activeReward.currentUseIndex}/{loyaltyData.activeReward.orderLimit}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* ===== END VIP BANNER ===== */}
+
+              {/* Dynamic Shipping Rate Badge (only shown when NOT a loyalty free delivery) */}
+              {shippingTierLabel && !loyaltyData?.activeReward?.isEligible && (
                 <div className={`mb-3 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 ${
                   dynamicDeliveryFee === 0
                     ? "bg-emerald-50 border border-emerald-200 text-emerald-700"
@@ -568,6 +727,9 @@ const PlaceOrder = () => {
               <CartTotal
                 deliveryFee={dynamicDeliveryFee}
                 shippingLabel={shippingTierLabel}
+                loyaltyDiscount={loyaltyDiscountAmount}
+                loyaltyLabel={loyaltyDiscountLabel}
+                loyaltyGift={loyaltyGiftInfo}
               />
             </div>
 

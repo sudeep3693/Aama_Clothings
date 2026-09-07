@@ -12,6 +12,8 @@ import subCategoryRouter from "./routes/subCategoryRoute.js";
 import colorRouter from "./routes/colorRoute.js";
 import reviewRouter from "./routes/reviewRoute.js";
 import shippingRouter from "./routes/shippingRoute.js";
+import loyaltyRouter from "./routes/loyaltyRoute.js";
+import customerRouter from "./routes/customerRoute.js";
 
 // App Config
 const app = express();
@@ -41,6 +43,8 @@ app.use("/api/subcategory", subCategoryRouter);
 app.use("/api/color", colorRouter);
 app.use("/api/review", reviewRouter);
 app.use("/api/shipping", shippingRouter);
+app.use("/api/loyalty", loyaltyRouter);
+app.use("/api/customer", customerRouter);
 
 app.get("/", (req, res) => {
   res.send("API Working");
