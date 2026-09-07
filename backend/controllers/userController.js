@@ -7,12 +7,27 @@ const createToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET);
 };
 
+// Helper: Safely parse JSON array field from Prisma
+const parseJsonArray = (val) => {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string") {
+    try {
+      const parsed = JSON.parse(val);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
 // Route for user login
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     if (!user) {
       return res.json({ success: false, message: "User doesn't exist" });
     }
@@ -21,7 +36,20 @@ const loginUser = async (req, res) => {
 
     if (isMatch) {
       const token = createToken(user.id);
-      res.json({ success: true, token });
+      const addresses = parseJsonArray(user.addresses);
+      res.json({
+        success: true,
+        token,
+        user: {
+          id: user.id,
+          firstName: user.firstName || "",
+          lastName: user.lastName || "",
+          name: user.name,
+          email: user.email,
+          phone: user.phone || "",
+          addresses,
+        },
+      });
     } else {
       res.json({ success: false, message: "Invalid credentials" });
     }
@@ -34,7 +62,7 @@ const loginUser = async (req, res) => {
 // Route for user register
 const registerUser = async (req, res) => {
   try {
-    const { firstName, lastName, name, email, phone, password, agreeTerms } = req.body;
+    const { firstName, lastName, name, email, phone, password } = req.body;
 
     // Validate name fields
     let fName = (firstName || "").trim();
@@ -65,7 +93,7 @@ const registerUser = async (req, res) => {
     }
 
     // Checking user already exists or not
-    const exists = await prisma.user.findUnique({ where: { email } });
+    const exists = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     if (exists) {
       return res.json({ success: false, message: "User already exists with this email" });
     }
@@ -107,6 +135,7 @@ const registerUser = async (req, res) => {
         email: email.trim().toLowerCase(),
         password: hashedPassword,
         cartData: {},
+        addresses: [],
       },
     });
 
@@ -122,8 +151,115 @@ const registerUser = async (req, res) => {
         name: user.name,
         email: user.email,
         phone: user.phone,
+        addresses: [],
       },
     });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// Route for getting user profile details
+const getUserProfile = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.json({ success: false, message: "User not found" });
+    }
+
+    const addresses = parseJsonArray(user.addresses);
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        name: user.name,
+        email: user.email,
+        phone: user.phone || "",
+        addresses,
+      },
+    });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// Route for saving user address
+const saveUserAddress = async (req, res) => {
+  try {
+    const { userId, address } = req.body;
+    if (!address) {
+      return res.json({ success: false, message: "Address is required" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.json({ success: false, message: "User not found" });
+    }
+
+    let addresses = parseJsonArray(user.addresses);
+
+    if (address.id) {
+      addresses = addresses.map((a) => (a.id === address.id ? { ...a, ...address } : a));
+    } else {
+      const newAddress = {
+        ...address,
+        id: Date.now().toString(),
+        createdAt: Date.now(),
+      };
+      addresses = [
+        newAddress,
+        ...addresses.filter(
+          (a) =>
+            !(
+              a.city === address.city &&
+              a.street === address.street &&
+              a.state === address.state
+            )
+        ),
+      ];
+    }
+
+    // Keep max 5 saved addresses
+    if (addresses.length > 5) {
+      addresses = addresses.slice(0, 5);
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { addresses },
+    });
+
+    res.json({ success: true, message: "Address saved successfully", addresses });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// Route for deleting user address
+const deleteUserAddress = async (req, res) => {
+  try {
+    const { userId, addressId } = req.body;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.json({ success: false, message: "User not found" });
+    }
+
+    let addresses = parseJsonArray(user.addresses);
+    addresses = addresses.filter((a) => a.id !== addressId);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { addresses },
+    });
+
+    res.json({ success: true, message: "Address removed", addresses });
   } catch (error) {
     console.log(error);
     res.json({ success: false, message: error.message });
@@ -149,4 +285,11 @@ const adminLogin = async (req, res) => {
   }
 };
 
-export { loginUser, registerUser, adminLogin };
+export {
+  loginUser,
+  registerUser,
+  getUserProfile,
+  saveUserAddress,
+  deleteUserAddress,
+  adminLogin,
+};

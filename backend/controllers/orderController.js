@@ -97,10 +97,51 @@ const placeOrder = async (req, res) => {
 
     await prisma.order.create({ data: orderData });
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { cartData: {} },
-    });
+    // Update user cart and saved addresses
+    try {
+      const userRecord = await prisma.user.findUnique({ where: { id: userId } });
+      if (userRecord) {
+        let addresses = [];
+        if (Array.isArray(userRecord.addresses)) addresses = userRecord.addresses;
+        else if (typeof userRecord.addresses === "string") {
+          try {
+            addresses = JSON.parse(userRecord.addresses);
+          } catch {
+            addresses = [];
+          }
+        }
+
+        const newAddr = {
+          ...address,
+          id: Date.now().toString(),
+          createdAt: Date.now(),
+        };
+
+        const existingIdx = addresses.findIndex(
+          (a) =>
+            a.city === address.city &&
+            a.street === address.street &&
+            a.state === address.state
+        );
+
+        if (existingIdx !== -1) {
+          addresses[existingIdx] = { ...addresses[existingIdx], ...newAddr };
+        } else {
+          addresses = [newAddr, ...addresses].slice(0, 5);
+        }
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: { cartData: {}, addresses },
+        });
+      }
+    } catch (addrErr) {
+      console.error("Error saving address to user profile:", addrErr);
+      await prisma.user.update({
+        where: { id: userId },
+        data: { cartData: {} },
+      });
+    }
 
     // Aggregate all requested items by product ID and variant
     const productDeductions = {};

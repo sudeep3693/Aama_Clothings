@@ -16,6 +16,7 @@ model User {
   email     String  @unique
   password  String
   cartData  Json    @default("{}")
+  addresses Json    @default("[]")
 }
 
 model Product {
