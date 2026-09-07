@@ -9,7 +9,7 @@ export const ShopContext = createContext();
 
 const ShopContextProvider = (props) => {
   const currency = "Rs ";
-  const delivery_fee = 10;
+  const delivery_fee = 50; // fallback only — dynamic fee is calculateDeliveryFee
   const backendUrl = import.meta.env.VITE_BACKEND_URL;
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
@@ -17,6 +17,41 @@ const ShopContextProvider = (props) => {
   const [products, setProducts] = useState([]);
   const [token, setToken] = useState("");
   const navigate = useNavigate();
+
+  // Shipping config from backend
+  const [shippingConfig, setShippingConfig] = useState({
+    baseCity: "Kathmandu",
+    sameCityFee: 50,
+    differentCityFee: 120,
+    freeShippingMin: 0,
+  });
+
+  const fetchShippingConfig = async () => {
+    try {
+      const res = await axios.get(backendUrl + "/api/shipping/config");
+      if (res.data.success && res.data.config) {
+        const c = res.data.config;
+        setShippingConfig({
+          baseCity: c.baseCity || "Kathmandu",
+          sameCityFee: Number(c.sameCityFee ?? 50),
+          differentCityFee: Number(c.differentCityFee ?? 120),
+          freeShippingMin: Number(c.freeShippingMin ?? 0),
+        });
+      }
+    } catch (err) {
+      console.warn("Could not fetch shipping config, using defaults.", err.message);
+    }
+  };
+
+  // Calculate delivery fee based on city and subtotal
+  const calculateDeliveryFee = (city, subtotal) => {
+    const freeMin = Number(shippingConfig.freeShippingMin || 0);
+    if (freeMin > 0 && subtotal >= freeMin) return 0;
+    const destCity = (city || "").trim().toLowerCase();
+    const baseCity = (shippingConfig.baseCity || "Kathmandu").trim().toLowerCase();
+    if (destCity && destCity === baseCity) return shippingConfig.sameCityFee;
+    return shippingConfig.differentCityFee;
+  };
 
   const getMaxStock = (product, size, color) => {
     if (!product) return 0;
@@ -217,6 +252,7 @@ const ShopContextProvider = (props) => {
 
   useEffect(() => {
     getProductsData();
+    fetchShippingConfig();
   }, []);
 
   useEffect(() => {
@@ -246,6 +282,8 @@ const ShopContextProvider = (props) => {
     products,
     currency,
     delivery_fee,
+    shippingConfig,
+    calculateDeliveryFee,
     search,
     setSearch,
     showSearch,

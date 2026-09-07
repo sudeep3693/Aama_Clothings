@@ -28,6 +28,7 @@ const Orders = () => {
             item["payment"] = order.payment;
             item["paymentMethod"] = order.paymentMethod;
             item["date"] = order.date;
+            item["orderAmount"] = order.amount;
             allOrdersItem.push(item);
           });
         });
@@ -49,49 +50,73 @@ const Orders = () => {
         <Title text1={"MY"} text2={"ORDERS"} />
       </div>
       <div>
-        {orderData.map((item, index) => (
-          <div
-            key={index}
-            className="py-4 border-t border-b text-gray-700 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
-          >
-            <div className="flex items-start gap-6 text-sm">
-              <img className="w-16 sm:w-20" src={item.image[0]} alt="" />
-              <div>
-                <p className="sm:text-base font-medium">{item.name}</p>
-                <div className="flex items-center gap-3 mt-1 text-base text-gray-700">
-                  <p>
-                    {currency}
-                    {item.price}
+        {orderData.map((item, index) => {
+          const unitPrice = Number(item.purchasedUnitPrice ?? item.price ?? 0);
+          const qty = Number(item.quantity || 1);
+          const lineTotal = unitPrice * qty;
+
+          return (
+            <div
+              key={index}
+              className="py-4 border-t border-b text-gray-700 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+            >
+              <div className="flex items-start gap-6 text-sm">
+                <img className="w-16 sm:w-20" src={item.image[0]} alt="" />
+                <div>
+                  <p className="sm:text-base font-medium">{item.name}</p>
+                  <div className="flex items-center gap-3 mt-1 text-sm text-gray-700 flex-wrap">
+                    <p className="font-bold text-gray-900">
+                      {currency}{lineTotal}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      ({currency}{unitPrice} x {qty})
+                    </p>
+                    {item.size && (
+                      <span className="px-2 py-0.5 border bg-slate-50 text-xs">
+                        Size: {item.size}
+                      </span>
+                    )}
+                    {item.color && (
+                      <span className="px-2 py-0.5 border bg-slate-50 text-xs">
+                        Color: {item.color}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs">
+                    Order Total:{" "}
+                    <strong className="text-gray-900">
+                      {currency}{item.orderAmount}
+                    </strong>
                   </p>
-                  <p>Quantity: {item.quantity}</p>
-                  <p>Size: {item.size}</p>
+                  <p className="mt-0.5 text-xs">
+                    Date:{" "}
+                    <span className="text-gray-500">
+                      {new Date(item.date).toDateString()}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 text-xs">
+                    Payment:{" "}
+                    <span className="text-gray-500">
+                      {item.paymentMethod} ({item.payment ? "Paid" : "Pending"})
+                    </span>
+                  </p>
                 </div>
-                <p className="mt-1">
-                  Date:
-                  <span className="text-gray-400">
-                    {new Date(item.date).toDateString()}
-                  </span>
-                </p>
-                <p className="mt-1">
-                  Payment:
-                  <span className="text-gray-400"> {item.paymentMethod}</span>
-                </p>
+              </div>
+              <div className="md:w-1/2 flex justify-between">
+                <div className="flex items-center gap-2">
+                  <p className="min-w-2 h-2 rounded-full bg-green-500"></p>
+                  <p className="text-sm md:text-base">{item.status}</p>
+                </div>
+                <button
+                  onClick={loadOrderData}
+                  className="border px-4 py-2 text-sm font-medium rounded-sm"
+                >
+                  Track Order
+                </button>
               </div>
             </div>
-            <div className="md:w-1/2 flex justify-between">
-              <div className="flex items-center gap-2">
-                <p className="min-w-2 h-2 rounded-full bg-green-500"></p>
-                <p className="text-sm md:text-base">{item.status}</p>
-              </div>
-              <button
-                onClick={loadOrderData}
-                className="border px-4 py-2 text-sm font-medium rounded-sm"
-              >
-                Track Order
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

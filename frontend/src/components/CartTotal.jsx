@@ -3,8 +3,18 @@ import React, { useContext } from "react";
 import { ShopContext } from "../context/ShopContext";
 import Title from "./Title";
 
-const CartTotal = () => {
-  const { currency, delivery_fee, getCartAmount } = useContext(ShopContext);
+/**
+ * CartTotal - reusable cart summary.
+ * @param {number} [deliveryFee]   – override shipping fee (e.g. from PlaceOrder dynamic calc)
+ * @param {string} [shippingLabel] – human-readable label (e.g. "Inside Kathmandu")
+ */
+const CartTotal = ({ deliveryFee, shippingLabel }) => {
+  const { currency, delivery_fee, getCartAmount, shippingConfig } = useContext(ShopContext);
+
+  // Resolve the shipping fee to display
+  const resolvedFee = deliveryFee !== undefined ? deliveryFee : delivery_fee;
+  const subtotal = getCartAmount();
+
   return (
     <div className="w-full">
       <div className="text-2xl">
@@ -14,14 +24,19 @@ const CartTotal = () => {
         <div className="flex justify-between">
           <p>Subtotal</p>
           <p>
-            {currency} {getCartAmount()}.00
+            {currency} {subtotal}.00
           </p>
         </div>
         <hr />
-        <div className="flex justify-between">
-          <p>Shipping Fee</p>
-          <p>
-            {currency} {delivery_fee}.00
+        <div className="flex justify-between items-start">
+          <div>
+            <p>Shipping Fee</p>
+            {shippingLabel && (
+              <p className="text-[11px] text-gray-400">{shippingLabel}</p>
+            )}
+          </div>
+          <p className={resolvedFee === 0 ? "text-green-600 font-semibold" : ""}>
+            {resolvedFee === 0 ? "FREE" : `${currency} ${resolvedFee}.00`}
           </p>
         </div>
         <hr />
@@ -29,7 +44,7 @@ const CartTotal = () => {
           <b>Total</b>
           <b>
             {currency}
-            {getCartAmount() === 0 ? 0 : getCartAmount() + delivery_fee}.00
+            {subtotal === 0 ? 0 : subtotal + resolvedFee}.00
           </b>
         </div>
       </div>
@@ -38,3 +53,4 @@ const CartTotal = () => {
 };
 
 export default CartTotal;
+

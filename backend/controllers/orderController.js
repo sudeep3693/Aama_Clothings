@@ -83,7 +83,32 @@ const placeOrder = async (req, res) => {
     });
 
     const itemsTotal = frozenItemsSnapshot.reduce((acc, item) => acc + item.lineTotal, 0);
-    const finalAmount = itemsTotal + deliveryCharge;
+    
+    // Resolve dynamic shipping charge from ShippingConfig
+    let expectedFee = deliveryCharge;
+    try {
+      const shippingCfg = await prisma.shippingConfig.findFirst();
+      if (shippingCfg) {
+        const destCity = (address?.city || "").trim().toLowerCase();
+        const baseCity = (shippingCfg.baseCity || "Kathmandu").trim().toLowerCase();
+        const isFree = Number(shippingCfg.freeShippingMin || 0) > 0 && itemsTotal >= Number(shippingCfg.freeShippingMin);
+
+        if (isFree) {
+          expectedFee = 0;
+        } else if (destCity && destCity === baseCity) {
+          expectedFee = Number(shippingCfg.sameCityFee || 50);
+        } else {
+          expectedFee = Number(shippingCfg.differentCityFee || 120);
+        }
+      }
+    } catch (cfgErr) {
+      console.error("Error reading shipping config:", cfgErr);
+    }
+
+    const resolvedFee = req.body.deliveryFee !== undefined
+      ? Math.max(0, Number(req.body.deliveryFee))
+      : expectedFee;
+    const finalAmount = itemsTotal + resolvedFee;
 
     const orderData = {
       userId,

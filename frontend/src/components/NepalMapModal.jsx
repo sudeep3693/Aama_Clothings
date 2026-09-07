@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import L from "leaflet";
 import {
   NEPAL_CITIES,
@@ -32,6 +32,7 @@ const NepalMapModal = ({
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
+  const searchDropdownRef = useRef(null);
 
   const defaultCityInfo = getCityInfo(initialCity) || NEPAL_CITIES[0];
 
@@ -45,6 +46,28 @@ const NepalMapModal = ({
   });
 
   const [locating, setLocating] = useState(false);
+
+  // Search feature states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  // Predefined shortcut cities: existing ones + POKHARA
+  const shortcutCities = useMemo(() => {
+    return [
+      NEPAL_CITIES.find((c) => c.name === "Kathmandu"),
+      NEPAL_CITIES.find((c) => c.name === "Pokhara"), // Explicitly added as requested
+      NEPAL_CITIES.find((c) => c.name.includes("Lalitpur")),
+      NEPAL_CITIES.find((c) => c.name.includes("Bhaktapur")),
+      NEPAL_CITIES.find((c) => c.name.includes("Bharatpur")),
+      NEPAL_CITIES.find((c) => c.name === "Hetauda"),
+      NEPAL_CITIES.find((c) => c.name === "Banepa"),
+      NEPAL_CITIES.find((c) => c.name === "Dhulikhel"),
+      NEPAL_CITIES.find((c) => c.name === "Butwal"),
+      NEPAL_CITIES.find((c) => c.name === "Biratnagar"),
+    ].filter(Boolean);
+  }, []);
 
   // Initialize and mount Leaflet map
   useEffect(() => {
@@ -108,6 +131,20 @@ const NepalMapModal = ({
     };
   }, [isOpen]);
 
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        searchDropdownRef.current &&
+        !searchDropdownRef.current.contains(e.target)
+      ) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Handle coordinates clicked/dragged on map
   const handleCoordinatesSelected = async (lat, lng, map) => {
     const matched = findNearestNepalCity(lat, lng);
@@ -126,7 +163,11 @@ const NepalMapModal = ({
       if (res.ok) {
         const data = await res.json();
         if (data && data.address) {
-          const road = data.address.road || data.address.suburb || data.address.neighbourhood || "";
+          const road =
+            data.address.road ||
+            data.address.suburb ||
+            data.address.neighbourhood ||
+            "";
           addressSnippet = road;
         }
       }
@@ -165,6 +206,110 @@ const NepalMapModal = ({
     }
   };
 
+  // Debounced search for location in Nepal
+  useEffect(() => {
+    if (!searchTerm.trim() || searchTerm.trim().length < 2) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    const qLower = searchTerm.toLowerCase();
+
+    // 1. Instant local matching from NEPAL_CITIES
+    const localMatches = NEPAL_CITIES.filter(
+      (c) =>
+        c.name.toLowerCase().includes(qLower) ||
+        c.province.toLowerCase().includes(qLower)
+    ).map((c) => ({
+      name: c.name,
+      subtitle: `${c.province} • Postal: ${c.zipcode}`,
+      lat: c.lat,
+      lng: c.lng,
+      isCity: true,
+      cityObj: c,
+    }));
+
+    setSearchResults(localMatches);
+    setShowDropdown(true);
+
+    // 2. Query OpenStreetMap Nominatim bounded to Nepal for detailed streets/places
+    const debounceTimer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          searchTerm
+        )}&countrycodes=np&limit=6&addressdetails=1`;
+        const res = await fetch(url, {
+          headers: { "Accept-Language": "en" },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const remoteResults = data.map((item) => ({
+            name: item.display_name.split(",")[0],
+            subtitle: item.display_name,
+            lat: parseFloat(item.lat),
+            lng: parseFloat(item.lon),
+            isNominatim: true,
+          }));
+
+          // Merge local and remote results without duplicates
+          const seen = new Set();
+          const merged = [];
+
+          for (const item of [...localMatches, ...remoteResults]) {
+            const key = `${item.name.toLowerCase()}-${Math.round(item.lat * 100)}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              merged.push(item);
+            }
+          }
+
+          setSearchResults(merged.slice(0, 8));
+          setShowDropdown(merged.length > 0);
+        }
+      } catch (err) {
+        console.error("Nominatim search error:", err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(debounceTimer);
+  }, [searchTerm]);
+
+  // Handle selecting a search result
+  const handleSelectSearchResult = (result) => {
+    const { lat, lng } = result;
+
+    if (result.isCity && result.cityObj) {
+      handleSelectCityChip(result.cityObj);
+    } else {
+      if (markerRef.current && mapInstanceRef.current) {
+        markerRef.current.setLatLng([lat, lng]);
+        mapInstanceRef.current.flyTo([lat, lng], 15);
+      }
+      handleCoordinatesSelected(lat, lng, mapInstanceRef.current);
+    }
+
+    setSearchTerm(result.name);
+    setShowDropdown(false);
+    toast.success(`Location set: ${result.name}`);
+  };
+
+  // Handle pressing Enter in search input
+  const handleSearchKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (searchResults.length > 0) {
+        handleSelectSearchResult(searchResults[0]);
+      }
+    } else if (e.key === "Escape") {
+      setShowDropdown(false);
+    }
+  };
+
   // Browser Geolocation / GPS
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -178,7 +323,7 @@ const NepalMapModal = ({
         setLocating(false);
         const { latitude, longitude } = pos.coords;
 
-        // Check if within Nepal geographic limits (~26.3 to 30.5 N, ~80.0 to 88.3 E)
+        // Check if within Nepal geographic limits (~26.0 to 31.0 N, ~79.5 to 89.0 E)
         if (
           latitude < 26.0 ||
           latitude > 31.0 ||
@@ -202,7 +347,7 @@ const NepalMapModal = ({
           longitude,
           mapInstanceRef.current
         );
-        toast.success("Location identified!");
+        toast.success("GPS location identified!");
       },
       (err) => {
         setLocating(false);
@@ -224,6 +369,7 @@ const NepalMapModal = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col shadow-2xl border border-gray-100 overflow-hidden animate-scaleUp">
+        
         {/* Header */}
         <div className="bg-gray-900 text-white px-5 py-3.5 flex items-center justify-between flex-shrink-0">
           <div>
@@ -231,7 +377,7 @@ const NepalMapModal = ({
               <span className="text-base font-bold">Choose Delivery Location (Nepal 🇳🇵)</span>
             </div>
             <p className="text-xs text-gray-300">
-              Click anywhere on the map, use GPS, or pick a city to auto-fill your delivery address
+              Search any place, click anywhere on the map, or use shortcuts to auto-fill address
             </p>
           </div>
           <button
@@ -245,49 +391,135 @@ const NepalMapModal = ({
           </button>
         </div>
 
-        {/* Action Toolbar & Popular Cities */}
-        <div className="bg-gray-50 border-b border-gray-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
+        {/* Location Search Bar */}
+        <div className="bg-gray-50 border-b border-gray-200 px-4 py-2.5 relative flex-shrink-0" ref={searchDropdownRef}>
+          <div className="relative">
+            <svg
+              className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search location in Nepal (e.g. Pokhara, Lakeside, Thamel, New Road, Chitwan)..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onFocus={() => {
+                if (searchResults.length > 0) setShowDropdown(true);
+              }}
+              onKeyDown={handleSearchKeyDown}
+              className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-gray-300 rounded-xl shadow-xs focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+            />
+            {isSearching ? (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
+            ) : searchTerm ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm("");
+                  setSearchResults([]);
+                  setShowDropdown(false);
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 text-xs"
+              >
+                ✕
+              </button>
+            ) : null}
+          </div>
+
+          {/* Autocomplete Dropdown */}
+          {showDropdown && searchResults.length > 0 && (
+            <div className="absolute left-4 right-4 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[500] max-h-56 overflow-y-auto divide-y divide-gray-100">
+              {searchResults.map((result, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSelectSearchResult(result)}
+                  className="w-full px-3.5 py-2 text-left hover:bg-rose-50/70 flex items-start gap-2.5 transition-colors group"
+                >
+                  <span className="text-sm mt-0.5 text-rose-500 group-hover:scale-110 transition-transform">
+                    📍
+                  </span>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="text-xs font-bold text-gray-800 truncate">
+                      {result.name}
+                    </p>
+                    <p className="text-[11px] text-gray-500 truncate">
+                      {result.subtitle}
+                    </p>
+                  </div>
+                  {result.isCity && (
+                    <span className="bg-gray-100 text-gray-600 text-[10px] font-semibold px-1.5 py-0.5 rounded self-center">
+                      City
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Action Toolbar & Shortcuts (Including Pokhara) */}
+        <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
           {/* GPS Auto-Detect Button */}
           <button
             type="button"
             onClick={handleUseCurrentLocation}
             disabled={locating}
-            className="bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+            className="bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-xs transition-all disabled:opacity-50"
           >
             {locating ? (
-              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             ) : (
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             )}
-            <span>Use My GPS Location</span>
+            <span>GPS Location</span>
           </button>
 
-          {/* Quick City Chips */}
+          {/* Quick City Shortcut Chips (Includes previous + Pokhara) */}
           <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0 scrollbar-none text-xs">
-            <span className="text-[11px] text-gray-500 font-medium whitespace-nowrap">Quick Pick:</span>
-            {NEPAL_CITIES.slice(0, 7).map((c) => (
-              <button
-                type="button"
-                key={c.name}
-                onClick={() => handleSelectCityChip(c)}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all whitespace-nowrap ${
-                  selectedLocation.city === c.name
-                    ? "bg-black text-white"
-                    : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                {c.name.split(" ")[0]}
-              </button>
-            ))}
+            <span className="text-[11px] text-gray-500 font-medium whitespace-nowrap">
+              Shortcuts:
+            </span>
+            {shortcutCities.map((c) => {
+              const isPokhara = c.name === "Pokhara";
+              const isSelected = selectedLocation.city === c.name;
+
+              return (
+                <button
+                  type="button"
+                  key={c.name}
+                  onClick={() => handleSelectCityChip(c)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all whitespace-nowrap flex items-center gap-1 ${
+                    isSelected
+                      ? "bg-black text-white shadow-xs"
+                      : isPokhara
+                      ? "bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 font-semibold"
+                      : "bg-gray-100 border border-gray-200 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {isPokhara && <span>🌟</span>}
+                  <span>{c.name.split(" ")[0]}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Leaflet Map Container */}
-        <div className="relative flex-1 min-h-[320px] sm:min-h-[380px] w-full bg-slate-100">
-          <div ref={mapContainerRef} className="w-full h-full" style={{ minHeight: "340px" }} />
+        <div className="relative flex-1 min-h-[300px] sm:min-h-[360px] w-full bg-slate-100">
+          <div ref={mapContainerRef} className="w-full h-full" style={{ minHeight: "320px" }} />
           <div className="absolute top-2 right-2 z-[400] bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-md text-[10px] text-gray-600 shadow-sm pointer-events-none">
             📍 Drag pin or click map to move
           </div>
@@ -338,6 +570,7 @@ const NepalMapModal = ({
             </button>
           </div>
         </div>
+
       </div>
     </div>
   );

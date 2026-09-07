@@ -78,3 +78,13 @@ model Review {
   verified  Boolean @default(true)
   date      BigInt
 }
+
+model ShippingConfig {
+  id               String   @id @default("default")
+  baseCity         String   @default("Kathmandu")
+  sameCityFee      Float    @default(50)
+  differentCityFee Float    @default(120)
+  freeShippingMin  Float?   @default(0)
+  updatedAt        DateTime @updatedAt
+}
+

@@ -14,7 +14,9 @@ import {
 } from "../data/nepalLocations";
 
 const PlaceOrder = () => {
-  const [method, setMethod] = useState("cod");
+  const [
+    method, setMethod
+  ] = useState("cod");
   const {
     navigate,
     backendUrl,
@@ -23,6 +25,8 @@ const PlaceOrder = () => {
     setCartItems,
     getCartAmount,
     delivery_fee,
+    shippingConfig,
+    calculateDeliveryFee,
     products,
     getMaxStock,
     getProductsData,
@@ -47,6 +51,10 @@ const PlaceOrder = () => {
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Dynamic delivery fee - recalculated when city changes
+  const [dynamicDeliveryFee, setDynamicDeliveryFee] = useState(delivery_fee);
+  const [shippingTierLabel, setShippingTierLabel] = useState("");
 
   // Fetch logged-in user profile & saved addresses
   const fetchUserProfile = async () => {
@@ -100,6 +108,23 @@ const PlaceOrder = () => {
   useEffect(() => {
     fetchUserProfile();
   }, [token]);
+
+  // Recalculate fee whenever city or shippingConfig changes
+  useEffect(() => {
+    const subtotal = getCartAmount();
+    const fee = calculateDeliveryFee(formData.city, subtotal);
+    setDynamicDeliveryFee(fee);
+    const baseCity = shippingConfig?.baseCity || "Kathmandu";
+    const isLocal = (formData.city || "").trim().toLowerCase() === baseCity.trim().toLowerCase();
+    const freeMin = Number(shippingConfig?.freeShippingMin || 0);
+    if (freeMin > 0 && subtotal >= freeMin) {
+      setShippingTierLabel("🎁 Free Delivery (Order above Rs. " + freeMin + ")");
+    } else if (isLocal) {
+      setShippingTierLabel(`🏠 Inside ${baseCity}`);
+    } else {
+      setShippingTierLabel(`🚚 Outside ${baseCity}`);
+    }
+  }, [formData.city, shippingConfig, cartItems]);
 
   const onChangeHandler = (event) => {
     const { name, value } = event.target;
@@ -244,7 +269,8 @@ const PlaceOrder = () => {
           country: "Nepal",
         },
         items: orderItems,
-        amount: getCartAmount() + delivery_fee,
+        deliveryFee: dynamicDeliveryFee,
+        amount: getCartAmount() + dynamicDeliveryFee,
       };
 
       switch (method) {
@@ -524,7 +550,25 @@ const PlaceOrder = () => {
         <div className="flex-1 lg:max-w-[420px] flex flex-col justify-between">
           <div>
             <div className="min-w-full">
-              <CartTotal />
+              {/* Dynamic Shipping Rate Badge */}
+              {shippingTierLabel && (
+                <div className={`mb-3 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+                  dynamicDeliveryFee === 0
+                    ? "bg-emerald-50 border border-emerald-200 text-emerald-700"
+                    : shippingTierLabel.includes("Inside")
+                    ? "bg-sky-50 border border-sky-200 text-sky-700"
+                    : "bg-amber-50 border border-amber-200 text-amber-700"
+                }`}>
+                  <span>{shippingTierLabel}</span>
+                  <span className="ml-auto font-bold">
+                    {dynamicDeliveryFee === 0 ? "FREE" : `Rs. ${dynamicDeliveryFee}`}
+                  </span>
+                </div>
+              )}
+              <CartTotal
+                deliveryFee={dynamicDeliveryFee}
+                shippingLabel={shippingTierLabel}
+              />
             </div>
 
             {/* Delivery Destination Badge */}
