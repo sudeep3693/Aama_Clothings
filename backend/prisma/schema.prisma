@@ -8,11 +8,14 @@ datasource db {
 }
 
 model User {
-  id       String @id @default(uuid())
-  name     String
-  email    String @unique
-  password String
-  cartData Json   @default("{}")
+  id        String  @id @default(uuid())
+  firstName String? @default("")
+  lastName  String? @default("")
+  phone     String? @default("")
+  name      String
+  email     String  @unique
+  password  String
+  cartData  Json    @default("{}")
 }
 
 model Product {
@@ -58,4 +61,19 @@ model SubCategory {
 model Color {
   id   String @id @default(uuid())
   name String @unique
+}
+
+model Review {
+  id        String  @id @default(uuid())
+  productId String
+  userId    String
+  userName  String
+  userEmail String
+  rating    Int
+  title     String? @default("")
+  comment   String  @db.Text
+  likes     Json    @default("[]")
+  dislikes  Json    @default("[]")
+  verified  Boolean @default(true)
+  date      BigInt
 }

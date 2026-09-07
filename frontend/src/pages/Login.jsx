@@ -1,45 +1,75 @@
-/* eslint-disable no-unused-vars */
 import React, { useContext, useEffect, useState } from "react";
 import { ShopContext } from "../context/ShopContext";
 import axios from "axios";
 import { toast } from "react-toastify";
+import TermsAndConditionsModal from "../components/TermsAndConditionsModal";
 
 const Login = () => {
   const [currentState, setCurrentState] = useState("Login");
   const { token, setToken, navigate, backendUrl } = useContext(ShopContext);
-  const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   const onSubmitHandler = async (event) => {
     event.preventDefault();
+
+    if (currentState === "Sign Up") {
+      if (!firstName.trim()) {
+        toast.error("Please enter your first name");
+        return;
+      }
+      if (!lastName.trim()) {
+        toast.error("Please enter your last name");
+        return;
+      }
+      if (!agreeTerms) {
+        toast.error("Please agree to the Terms & Conditions to register");
+        return;
+      }
+    }
+
     try {
+      setLoading(true);
       if (currentState === "Sign Up") {
         const response = await axios.post(backendUrl + "/api/user/register", {
-          name,
-          email,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim().toLowerCase(),
+          phone: phone.trim(),
           password,
         });
         if (response.data.success) {
           setToken(response.data.token);
           localStorage.setItem("token", response.data.token);
+          toast.success("Account created successfully!");
         } else {
           toast.error(response.data.message);
         }
       } else {
         const response = await axios.post(backendUrl + "/api/user/login", {
-          email,
+          email: email.trim().toLowerCase(),
           password,
         });
         if (response.data.success) {
           setToken(response.data.token);
           localStorage.setItem("token", response.data.token);
+          toast.success("Logged in successfully!");
         } else {
           toast.error(response.data.message);
         }
       }
     } catch (error) {
       console.log(error);
-      toast.error(error.message);
+      toast.error(error.response?.data?.message || error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -50,64 +80,139 @@ const Login = () => {
   }, [token]);
 
   return (
-    <form
-      onSubmit={onSubmitHandler}
-      className="flex flex-col items-center w-[90%] sm:max-w-96 m-auto mt-14 gap-4 text-gray-800"
-    >
-      <div className="inline-flex items-center gap-2 mb-2 mt-10">
-        <p className="prata-regular text-3xl">{currentState}</p>
-        <hr className="border-none h-[1.5px] w-8 bg-gray-800" />
-      </div>
-      {currentState === "Login" ? (
-        ""
-      ) : (
+    <>
+      <form
+        onSubmit={onSubmitHandler}
+        className="flex flex-col items-center w-[90%] sm:max-w-[420px] m-auto mt-14 gap-4 text-gray-800 bg-white p-6 sm:p-8 rounded-2xl border border-gray-100 shadow-sm"
+      >
+        <div className="inline-flex items-center gap-2 mb-2 mt-2">
+          <p className="prata-regular text-3xl">{currentState}</p>
+          <hr className="border-none h-[1.5px] w-8 bg-gray-800" />
+        </div>
+
+        {/* First & Last Name Inputs for Sign Up */}
+        {currentState === "Sign Up" && (
+          <div className="w-full flex gap-3">
+            <input
+              onChange={(e) => setFirstName(e.target.value)}
+              value={firstName}
+              type="text"
+              className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-black"
+              placeholder="First Name"
+              required
+            />
+            <input
+              onChange={(e) => setLastName(e.target.value)}
+              value={lastName}
+              type="text"
+              className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-black"
+              placeholder="Last Name"
+              required
+            />
+          </div>
+        )}
+
+        {/* Email Input */}
         <input
-          onChange={(e) => setName(e.target.value)}
-          value={name}
-          type="text"
-          className="w-full px-3 py-2 border border-gray-800"
-          placeholder="Name"
+          onChange={(e) => setEmail(e.target.value)}
+          value={email}
+          type="email"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-black"
+          placeholder="Email address"
           required
         />
-      )}
-      <input
-        onChange={(e) => setEmail(e.target.value)}
-        value={email}
-        type="email"
-        className="w-full px-3 py-2 border border-gray-800"
-        placeholder="Email"
-        required
-      />
-      <input
-        onChange={(e) => setPassword(e.target.value)}
-        value={password}
-        type="password"
-        className="w-full px-3 py-2 border border-gray-800"
-        placeholder="Password"
-        required
-      />
-      <div className="w-full flex justify-between text-sm mt-[-8px]">
-        <p className="cursor-pointer">Forgot your password?</p>
-        {currentState === "Login" ? (
-          <p
-            onClick={() => setCurrentState("Sign Up")}
-            className="cursor-pointer"
-          >
-            Create account
-          </p>
-        ) : (
-          <p
-            onClick={() => setCurrentState("Login")}
-            className="cursor-pointer"
-          >
-            Login Here
-          </p>
+
+        {/* Phone Number Input for Sign Up */}
+        {currentState === "Sign Up" && (
+          <input
+            onChange={(e) => setPhone(e.target.value)}
+            value={phone}
+            type="tel"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-black"
+            placeholder="Phone number (e.g. 9800000000)"
+            required
+          />
         )}
-      </div>
-      <button className="bg-black text-white font-light px-8 py-2 mt-4">
-        {currentState === "Login" ? "Sign In" : "Sign Up"}
-      </button>
-    </form>
+
+        {/* Password Input */}
+        <input
+          onChange={(e) => setPassword(e.target.value)}
+          value={password}
+          type="password"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-black"
+          placeholder="Password (min 8 characters)"
+          required
+        />
+
+        {/* Terms and Conditions Checkbox for Sign Up */}
+        {currentState === "Sign Up" && (
+          <div className="w-full flex items-start gap-2 text-xs text-gray-600 mt-1">
+            <input
+              type="checkbox"
+              id="agreeTerms"
+              checked={agreeTerms}
+              onChange={(e) => setAgreeTerms(e.target.checked)}
+              className="mt-0.5 w-4 h-4 text-black border-gray-300 rounded focus:ring-black cursor-pointer"
+            />
+            <label htmlFor="agreeTerms" className="cursor-pointer select-none leading-relaxed">
+              I have read and agree to the{" "}
+              <button
+                type="button"
+                onClick={() => setIsTermsOpen(true)}
+                className="text-black font-semibold underline hover:text-gray-700"
+              >
+                Terms & Conditions
+              </button>
+            </label>
+          </div>
+        )}
+
+        {/* Switch Between Login and Sign Up */}
+        <div className="w-full flex justify-between text-sm mt-1">
+          {currentState === "Login" ? (
+            <p className="cursor-pointer text-xs text-gray-500 hover:text-black">
+              Forgot your password?
+            </p>
+          ) : (
+            <div></div>
+          )}
+
+          {currentState === "Login" ? (
+            <p
+              onClick={() => setCurrentState("Sign Up")}
+              className="cursor-pointer text-xs font-semibold text-black hover:underline"
+            >
+              Create account
+            </p>
+          ) : (
+            <p
+              onClick={() => setCurrentState("Login")}
+              className="cursor-pointer text-xs font-semibold text-black hover:underline ml-auto"
+            >
+              Already have an account? Login
+            </p>
+          )}
+        </div>
+
+        {/* Submit Button */}
+        <button
+          disabled={loading}
+          className="bg-black text-white font-medium px-8 py-2.5 mt-2 rounded-lg w-full hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {loading && (
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          )}
+          {currentState === "Login" ? "Sign In" : "Create Account"}
+        </button>
+      </form>
+
+      {/* Terms and Conditions Modal */}
+      <TermsAndConditionsModal
+        isOpen={isTermsOpen}
+        onClose={() => setIsTermsOpen(false)}
+        onAccept={() => setAgreeTerms(true)}
+      />
+    </>
   );
 };
 

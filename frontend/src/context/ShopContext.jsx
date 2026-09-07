@@ -261,6 +261,7 @@ const ShopContextProvider = (props) => {
     setToken,
     token,
     getMaxStock,
+    getProductsData,
   };
 
   return (

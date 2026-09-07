@@ -143,8 +143,24 @@ const Cart = () => {
           <CartTotal />
           <div className="w-full text-end">
             <button
-              onClick={() => navigate("/place-order")}
-              className="bg-black text-white text-sm my-8 px-8 py-3"
+              onClick={() => {
+                // Check if any item in cart is out of stock or exceeds stock
+                for (const item of cartData) {
+                  const productData = products.find((p) => p._id === item._id);
+                  if (!productData) continue;
+                  const maxStock = getMaxStock(productData, item.size, item.color);
+                  if (maxStock <= 0) {
+                    alert(`"${productData.name}" (${item.size}/${item.color || 'Default'}) is out of stock. Please remove it from your cart.`);
+                    return;
+                  }
+                  if (item.quantity > maxStock) {
+                    alert(`"${productData.name}" (${item.size}/${item.color || 'Default'}) only has ${maxStock} in stock. Please adjust your quantity.`);
+                    return;
+                  }
+                }
+                navigate("/place-order");
+              }}
+              className="bg-black text-white text-sm my-8 px-8 py-3 hover:bg-gray-800 transition-colors rounded"
             >
               PROCEED TO CHECKOUT
             </button>

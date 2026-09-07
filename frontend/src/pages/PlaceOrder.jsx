@@ -18,6 +18,7 @@ const PlaceOrder = () => {
     delivery_fee,
     products,
     getMaxStock,
+    getProductsData,
   } = useContext(ShopContext);
   
   const [formData, setFormData] = useState({
@@ -102,6 +103,9 @@ const PlaceOrder = () => {
           if (response.data.success) {
             setCartItems({});
             localStorage.removeItem("cartItems");
+            if (getProductsData) {
+              await getProductsData();
+            }
             toast.success("Order Placed Successfully!");
             navigate("/orders");
           } else {

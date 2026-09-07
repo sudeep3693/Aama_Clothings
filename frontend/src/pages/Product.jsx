@@ -1,9 +1,9 @@
-/* eslint-disable no-unused-vars */
 import React, { useContext, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { ShopContext } from "../context/ShopContext";
 import { assets } from "../assets/assets";
 import RelatedProducts from "../components/RelatedProducts";
+import ReviewSection from "../components/ReviewSection";
 
 const Product = () => {
   const { productId } = useParams();
@@ -12,6 +12,8 @@ const Product = () => {
   const [image, setImage] = useState("");
   const [size, setSize] = useState("");
   const [color, setColor] = useState("");
+  const [activeTab, setActiveTab] = useState("reviews"); // "description" | "reviews"
+  const [reviewStats, setReviewStats] = useState({ totalReviews: 0, averageRating: 0 });
 
   const fetchProductData = async () => {
     products.map((item) => {
@@ -26,6 +28,22 @@ const Product = () => {
   useEffect(() => {
     fetchProductData();
   }, [productId, products]);
+
+  const renderTopStars = (score) => {
+    const rounded = Math.round(score || 0);
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <img
+          key={i}
+          className="w-3.5 h-3.5"
+          src={i <= rounded ? assets.star_icon : assets.star_dull_icon}
+          alt=""
+        />
+      );
+    }
+    return stars;
+  };
 
   return productData ? (
     <div className="border-t-2 pt-10 transition-opacity ease-in duration-500 opacity-100">
@@ -48,16 +66,19 @@ const Product = () => {
             <img className="w-full h-auto" src={image} alt="" />
           </div>
         </div>
-        {/* --- Product Infro --- */}
+        {/* --- Product Info --- */}
         <div className="flex-1">
           <h1 className="font-medium text-2xl mt-2">{productData.name}</h1>
-          <div className="flex items-center gap-1 mt-2">
-            <img className="w-3 5" src={assets.star_icon} alt="" />
-            <img className="w-3 5" src={assets.star_icon} alt="" />
-            <img className="w-3 5" src={assets.star_icon} alt="" />
-            <img className="w-3 5" src={assets.star_icon} alt="" />
-            <img className="w-3 5" src={assets.star_dull_icon} alt="" />
-            <p className="pl-2">(122)</p>
+          <div className="flex items-center gap-1.5 mt-2">
+            <div className="flex items-center gap-0.5">
+              {renderTopStars(reviewStats.averageRating)}
+            </div>
+            <span className="text-xs font-semibold text-amber-600 pl-1">
+              {reviewStats.averageRating > 0 ? reviewStats.averageRating : ""}
+            </span>
+            <p className="text-xs text-gray-500 pl-1">
+              ({reviewStats.totalReviews} {reviewStats.totalReviews === 1 ? "review" : "reviews"})
+            </p>
           </div>
           {productData.discount > 0 ? (
             <div className="flex items-center gap-3 mt-4">
@@ -187,29 +208,57 @@ const Product = () => {
       </div>
       {/* --- Description & Review Section */}
       <div className="mt-20">
-        <div className="flex">
-          <b className="border px-5 py-3 text-sm">Description</b>
-          <p className="border px-5 py-3 texm-sm">Reviews (122)</p>
+        <div className="flex border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab("description")}
+            className={`px-6 py-3 text-sm font-semibold transition-all border-b-2 ${
+              activeTab === "description"
+                ? "border-black text-black bg-white"
+                : "border-transparent text-gray-500 hover:text-black bg-gray-50"
+            }`}
+          >
+            Description
+          </button>
+          <button
+            onClick={() => setActiveTab("reviews")}
+            className={`px-6 py-3 text-sm font-semibold transition-all border-b-2 flex items-center gap-2 ${
+              activeTab === "reviews"
+                ? "border-black text-black bg-white"
+                : "border-transparent text-gray-500 hover:text-black bg-gray-50"
+            }`}
+          >
+            <span>Customer Reviews</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${
+              activeTab === "reviews" ? "bg-black text-white" : "bg-gray-200 text-gray-700"
+            }`}>
+              {reviewStats.totalReviews}
+            </span>
+          </button>
         </div>
-        <div className="flex flex-col gap-4 border px-6 py-6 text-sm text-gray-500">
-          <p>
-            An e-commerce website is an online platform that facilitates the
-            buying and selling of products or services over the internet. It
-            serves as a virtual marketplace where businesses and individuals can
-            showcase their products, interact with customers, and conduct
-            transactions without the need for a physical presence. E-commerce
-            websites have gained immense popularity due to their convenience,
-            accessibility, and the global reach they offer.
-          </p>
-          <p>
-            E-commerce websites typically display products or services along
-            with detailed descriptions, images, prices, and any available
-            variations (e.g., sizes, colors). Each product usually has its own
-            dedicated page with relevant information.
-          </p>
-        </div>
+
+        {activeTab === "description" ? (
+          <div className="flex flex-col gap-4 border border-t-0 px-6 py-6 text-sm text-gray-600 bg-white rounded-b-xl leading-relaxed">
+            <p>
+              {productData.description || "An authentic premium quality product crafted with attention to details and comfortable fabrics."}
+            </p>
+            <p>
+              E-commerce websites typically display products or services along
+              with detailed descriptions, images, prices, and any available
+              variations (e.g., sizes, colors). Each product usually has its own
+              dedicated page with relevant information.
+            </p>
+          </div>
+        ) : (
+          <div className="bg-white border border-t-0 px-6 py-6 rounded-b-xl">
+            <ReviewSection
+              productId={productData._id}
+              productName={productData.name}
+              onStatsUpdate={(newStats) => setReviewStats(newStats)}
+            />
+          </div>
+        )}
       </div>
-      {/* --- Dispaly related products --- */}
+      {/* --- Display related products --- */}
       <RelatedProducts
         category={productData.category}
         subCategory={productData.subCategory}

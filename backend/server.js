@@ -10,6 +10,7 @@ import orderRouter from "./routes/orderRoute.js";
 import categoryRouter from "./routes/categoryRoute.js";
 import subCategoryRouter from "./routes/subCategoryRoute.js";
 import colorRouter from "./routes/colorRoute.js";
+import reviewRouter from "./routes/reviewRoute.js";
 
 // App Config
 const app = express();
@@ -37,6 +38,7 @@ app.use("/api/order", orderRouter);
 app.use("/api/category", categoryRouter);
 app.use("/api/subcategory", subCategoryRouter);
 app.use("/api/color", colorRouter);
+app.use("/api/review", reviewRouter);
 
 app.get("/", (req, res) => {
   res.send("API Working");

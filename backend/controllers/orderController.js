@@ -102,45 +102,72 @@ const placeOrder = async (req, res) => {
       data: { cartData: {} },
     });
 
-    // Decrement stockQuantity for each ordered product and auto-mark OUT_OF_STOCK if depleted
+    // Aggregate all requested items by product ID and variant
+    const productDeductions = {};
     for (const cartItem of frozenItemsSnapshot) {
       const pId = cartItem.productId || cartItem._id;
       const orderedQty = Number(cartItem.quantity || 1);
       if (!pId) continue;
 
-      const prod = dbProducts.find((p) => p.id === pId);
-      if (!prod) continue;
-
-      // Only track quantity if it was explicitly set (> 0 means tracking is enabled)
-      let updateData = {};
-      let needsUpdate = false;
-
-      if (prod.stockQuantity > 0) {
-        const newQty = Math.max(0, prod.stockQuantity - orderedQty);
-        updateData.stockQuantity = newQty;
-        needsUpdate = true;
+      if (!productDeductions[pId]) {
+        productDeductions[pId] = {
+          totalQty: 0,
+          variantDeductions: [],
+        };
       }
+      productDeductions[pId].totalQty += orderedQty;
 
-      const sizeStr = cartItem.size;
-      const colorStr = cartItem.color;
-
-      // Decrement specific size-color variant quantity
-      const parsedVariants = typeof prod.variants === 'string' ? JSON.parse(prod.variants) : (prod.variants || []);
-      if (sizeStr && colorStr && parsedVariants.length > 0) {
-        const variantIndex = parsedVariants.findIndex(v => v.size === sizeStr && v.color === colorStr);
-        if (variantIndex !== -1 && parsedVariants[variantIndex].quantity > 0) {
-          parsedVariants[variantIndex].quantity = Math.max(0, parsedVariants[variantIndex].quantity - orderedQty);
-          updateData.variants = parsedVariants;
-          needsUpdate = true;
-        }
-      }
-
-      if (needsUpdate) {
-        await prisma.product.update({
-          where: { id: pId },
-          data: updateData,
+      if (cartItem.size && cartItem.color) {
+        productDeductions[pId].variantDeductions.push({
+          size: cartItem.size,
+          color: cartItem.color,
+          quantity: orderedQty,
         });
       }
+    }
+
+    // Safely apply aggregated stock deduction per product in DB
+    for (const [pId, deduction] of Object.entries(productDeductions)) {
+      const currentProd = await prisma.product.findUnique({ where: { id: pId } });
+      if (!currentProd) continue;
+
+      let updateData = {};
+      let parsedVariants = typeof currentProd.variants === "string"
+        ? JSON.parse(currentProd.variants || "[]")
+        : (currentProd.variants || []);
+
+      const hasVariants = Array.isArray(parsedVariants) && parsedVariants.length > 0;
+
+      if (hasVariants && deduction.variantDeductions.length > 0) {
+        for (const vd of deduction.variantDeductions) {
+          const vIdx = parsedVariants.findIndex(
+            (v) => v.size === vd.size && v.color === vd.color
+          );
+          if (vIdx !== -1) {
+            const currentVariantQty = Number(parsedVariants[vIdx].quantity || 0);
+            parsedVariants[vIdx].quantity = Math.max(0, currentVariantQty - vd.quantity);
+          }
+        }
+        updateData.variants = parsedVariants;
+
+        // Synchronize stockQuantity to the total remaining across all variants
+        const totalVariantStock = parsedVariants.reduce(
+          (acc, v) => acc + (Number(v.quantity) || 0),
+          0
+        );
+        updateData.stockQuantity = totalVariantStock;
+      } else if (
+        currentProd.stockQuantity !== undefined &&
+        currentProd.stockQuantity !== null
+      ) {
+        const newStock = Math.max(0, Number(currentProd.stockQuantity) - deduction.totalQty);
+        updateData.stockQuantity = newStock;
+      }
+
+      await prisma.product.update({
+        where: { id: pId },
+        data: updateData,
+      });
     }
 
     res.json({ success: true, message: "Order Placed Successfully" });
