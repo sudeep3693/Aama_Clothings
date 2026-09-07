@@ -336,9 +336,31 @@ const updateStatus = async (req, res) => {
   }
 };
 
+const cashReceived = async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) {
+      return res.json({ success: false, message: "Order not found" });
+    }
+    if (order.status !== "Delivered") {
+      return res.json({ success: false, message: "Order not delivered yet" });
+    }
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { payment: true },
+    });
+    res.json({ success: true, message: "Cash marked as received" });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
 export {
   placeOrder,
   allOrders,
   userOrders,
   updateStatus,
+  cashReceived,
 };

@@ -119,8 +119,13 @@ const Orders = ({ token }) => {
   }, [orders]);
 
   // Filtered orders based on selected tab and search term
+  const [showCompletedOnly, setShowCompletedOnly] = useState(false);
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
+      // Show completed only toggle
+      if (showCompletedOnly && order.status !== "Delivered") {
+        return false;
+      }
       // Status filter
       if (selectedStatus !== "All" && order.status !== selectedStatus) {
         return false;
@@ -282,6 +287,16 @@ const Orders = ({ token }) => {
       {/* Filter Tabs by Order Status */}
       <div className="bg-white border border-gray-200 rounded-xl p-2.5 mb-5 shadow-sm">
         <div className="flex flex-wrap items-center gap-1.5">
+          {/* Toggle to show only completed (Delivered) orders */}
+          <label className="flex items-center space-x-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={showCompletedOnly}
+              onChange={() => setShowCompletedOnly(!showCompletedOnly)}
+              className="rounded text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>Show Completed Only</span>
+          </label>
           {ORDER_STATUSES.map((status) => {
             const isActive = selectedStatus === status;
             const count = statusCounts[status] || 0;
@@ -497,6 +512,27 @@ const Orders = ({ token }) => {
                     >
                       {order.status}
                     </span>
+                    {/* Cash Received Button for pending payments */}
+                    {!order.payment && order.status === "Delivered" && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await axios.post(`${backendUrl}/api/order/cash-received`, { orderId: order._id }, { headers: { token } });
+                            if (res.data.success) {
+                              toast.success('Cash receipt recorded, order marked as paid');
+                              fetchAllOrders();
+                            } else {
+                              toast.error(res.data.message || 'Failed to record cash receipt');
+                            }
+                          } catch (e) {
+                            toast.error(e.message || 'Error marking cash received');
+                          }
+                        }}
+                        className="ml-2 px-2 py-0.5 bg-green-600 text-white text-[10px] rounded hover:bg-green-700"
+                      >
+                        Mark Cash Received
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -719,25 +755,36 @@ const Orders = ({ token }) => {
                           </div>
                         );
                       })()}
-                    </div>
-
-                    {/* Status Select Dropdown */}
-                    <div className="mt-4">
-                      <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
-                        Update Order Status:
-                      </label>
-                      <select
-                        onChange={(event) => statusHandler(event, order._id)}
-                        value={order.status}
-                        className="w-full p-2 bg-white border border-gray-300 font-semibold text-xs rounded-lg shadow-2xs focus:border-indigo-500"
-                      >
-                        <option value="Order Placed">Order Placed</option>
-                        <option value="Packing">Packing</option>
-                        <option value="Shipped">Shipped</option>
-                        <option value="Out for delivery">Out for delivery</option>
-                        <option value="Delivered">Delivered</option>
-                      </select>
-                    </div>
+                               {/* Status Navigation Buttons */}
+                     <div className="mt-4 flex items-center gap-2">
+                       <span className="block text-[11px] font-bold text-gray-700 uppercase">Update Order Status:</span>
+                       <button
+                         onClick={() => {
+                           const currentIdx = ORDER_STATUSES.indexOf(order.status);
+                           if (currentIdx > 1) {
+                             const newStatus = ORDER_STATUSES[currentIdx - 1];
+                             statusHandler({ target: { value: newStatus } }, order._id);
+                           }
+                         }}
+                         disabled={ORDER_STATUSES.indexOf(order.status) <= 1}
+                         className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                       >
+                         Previous
+                       </button>
+                       <button
+                         onClick={() => {
+                           const currentIdx = ORDER_STATUSES.indexOf(order.status);
+                           if (currentIdx < ORDER_STATUSES.length - 1) {
+                             const newStatus = ORDER_STATUSES[currentIdx + 1];
+                             statusHandler({ target: { value: newStatus } }, order._id);
+                           }
+                         }}
+                         disabled={ORDER_STATUSES.indexOf(order.status) >= ORDER_STATUSES.length - 1}
+                         className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                       >
+                         Next
+                       </button>
+                     </div>                  </div>
                   </div>
                 </div>
               </div>
