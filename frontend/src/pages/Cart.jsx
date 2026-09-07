@@ -6,7 +6,7 @@ import { assets } from "../assets/assets";
 import CartTotal from "../components/CartTotal";
 
 const Cart = () => {
-  const { products, currency, cartItems, updateQuantity, navigate } =
+  const { products, currency, cartItems, updateQuantity, navigate, getMaxStock } =
     useContext(ShopContext);
 
   const [cartData, setCartData] = useState([]);
@@ -37,76 +37,106 @@ const Cart = () => {
         <Title text1={"YOUR"} text2={"CART"} />
       </div>
       <div>
-        {cartData.map((item, index) => {
-          const productData = products.find(
-            (product) => product._id === item._id
-          );
-          return (
-            <div
-              key={index}
-              className="py-4 border-t border-b text-gray-700 grid grid-cols-[4fr_0.5fr_0.5fr] sm:grid-cols-[4fr_2fr_0.5fr] items-center gap-4"
+        {cartData.length === 0 ? (
+          <div className="text-center py-16 text-gray-500">
+            <p className="text-lg">Your cart is currently empty.</p>
+            <button
+              onClick={() => navigate("/collection")}
+              className="mt-4 bg-black text-white px-6 py-2 text-sm rounded hover:bg-gray-800"
             >
-              <div className="flex items-start gap-6">
-                <img
-                  className="w-16 sm:w-20"
-                  src={productData.image[0]}
-                  alt=""
-                />
-                <div>
-                  <p className="text-xs sm:text-lg font-medium">
-                    {productData.name}
-                  </p>
-                  <div className="flex items-center gap-5 mt-2">
-                    {productData.discount > 0 ? (
-                      <p className="flex items-center gap-2">
-                        <span className="font-semibold text-red-600">
-                          {currency}{Math.round(productData.price * (1 - productData.discount / 100))}
-                        </span>
-                        <span className="text-xs text-gray-400 line-through">
-                          {currency}{productData.price}
-                        </span>
-                      </p>
-                    ) : (
-                      <p>
-                        {currency} {productData.price}
-                      </p>
-                    )}
-                    <p className="px-2 sm:px-3 sm:py-1 border bg-slate-50">
-                      {item.size}
+              Shop Now
+            </button>
+          </div>
+        ) : (
+          cartData.map((item, index) => {
+            const productData = products.find(
+              (product) => product._id === item._id
+            );
+            if (!productData) return null;
+            const maxStock = getMaxStock(productData, item.size, item.color);
+            const isOverStock = item.quantity > maxStock;
+
+            return (
+              <div
+                key={index}
+                className="py-4 border-t border-b text-gray-700 grid grid-cols-[4fr_0.5fr_0.5fr] sm:grid-cols-[4fr_2fr_0.5fr] items-center gap-4"
+              >
+                <div className="flex items-start gap-6">
+                  <img
+                    className="w-16 sm:w-20 rounded"
+                    src={productData.image?.[0]}
+                    alt=""
+                  />
+                  <div>
+                    <p className="text-xs sm:text-lg font-medium">
+                      {productData.name}
                     </p>
-                    {item.color && (
-                      <p className="px-2 sm:px-3 sm:py-1 border bg-slate-50">
-                        {item.color}
+                    <div className="flex items-center gap-3 sm:gap-5 mt-2 flex-wrap">
+                      {productData.discount > 0 ? (
+                        <p className="flex items-center gap-2">
+                          <span className="font-semibold text-red-600">
+                            {currency}{Math.round(productData.price * (1 - productData.discount / 100))}
+                          </span>
+                          <span className="text-xs text-gray-400 line-through">
+                            {currency}{productData.price}
+                          </span>
+                        </p>
+                      ) : (
+                        <p>
+                          {currency} {productData.price}
+                        </p>
+                      )}
+                      <p className="px-2 sm:px-3 sm:py-1 border bg-slate-50 text-xs sm:text-sm">
+                        {item.size}
+                      </p>
+                      {item.color && (
+                        <p className="px-2 sm:px-3 sm:py-1 border bg-slate-50 text-xs sm:text-sm">
+                          {item.color}
+                        </p>
+                      )}
+                      {maxStock > 0 && (
+                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                          Max available: {maxStock}
+                        </span>
+                      )}
+                    </div>
+                    {isOverStock && (
+                      <p className="text-xs text-red-600 font-medium mt-1">
+                        ⚠️ Requested quantity exceeds available stock ({maxStock}).
                       </p>
                     )}
                   </div>
                 </div>
+                <div className="flex flex-col items-center">
+                  <input
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "" || val === "0") return;
+                      const num = Number(val);
+                      updateQuantity(
+                        item._id,
+                        item.size,
+                        item.color,
+                        num
+                      );
+                    }}
+                    className="border max-w-14 sm:max-w-20 px-2 py-1 text-center rounded"
+                    type="number"
+                    min={1}
+                    max={maxStock > 0 ? maxStock : 1}
+                    value={item.quantity}
+                  />
+                </div>
+                <img
+                  onClick={() => updateQuantity(item._id, item.size, item.color, 0)}
+                  className="w-4 mr-4 sm:w-5 cursor-pointer hover:opacity-75 transition-opacity"
+                  src={assets.bin_icon}
+                  alt="Delete"
+                />
               </div>
-              <input
-                onChange={(e) =>
-                  e.target.value === "" || e.target.value === "0"
-                    ? null
-                    : updateQuantity(
-                      item._id,
-                      item.size,
-                      item.color,
-                      Number(e.target.value)
-                    )
-                }
-                className="border max-w-10 sm:max-w-20 px-1 sm:px-2 py-1"
-                type="number"
-                min={1}
-                defaultValue={item.quantity}
-              />
-              <img
-                onClick={() => updateQuantity(item._id, item.size, item.color, 0)}
-                className="w-4 mr-4 sm:w-5 cursor-pointer"
-                src={assets.bin_icon}
-                alt=""
-              />
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
       <div className="flex justify-end my-20">
         <div className="w-full sm:w-[450px]">

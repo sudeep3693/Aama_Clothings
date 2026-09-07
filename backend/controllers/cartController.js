@@ -49,7 +49,14 @@ const updateCart = async (req, res) => {
     if (!cartData[itemId]) {
       cartData[itemId] = {};
     }
-    cartData[itemId][variantKey] = quantity;
+    if (quantity <= 0) {
+      delete cartData[itemId][variantKey];
+      if (Object.keys(cartData[itemId]).length === 0) {
+        delete cartData[itemId];
+      }
+    } else {
+      cartData[itemId][variantKey] = quantity;
+    }
 
     await prisma.user.update({
       where: { id: userId },

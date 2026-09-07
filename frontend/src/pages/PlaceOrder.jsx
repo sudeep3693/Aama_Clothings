@@ -17,6 +17,7 @@ const PlaceOrder = () => {
     getCartAmount,
     delivery_fee,
     products,
+    getMaxStock,
   } = useContext(ShopContext);
   
   const [formData, setFormData] = useState({
@@ -43,6 +44,11 @@ const PlaceOrder = () => {
 
   const onSubmitHandler = async (event) => {
     event.preventDefault();
+    if (!token) {
+      toast.error("Please login to place your order");
+      navigate("/login");
+      return;
+    }
     try {
       let orderItems = [];
       for (const items in cartItems) {
@@ -56,10 +62,26 @@ const PlaceOrder = () => {
               itemInfo.size = size;
               itemInfo.color = color || "";
               itemInfo.quantity = cartItems[items][item];
+
+              const maxStock = getMaxStock(itemInfo, size, color);
+              if (maxStock <= 0) {
+                toast.error(`"${itemInfo.name}" (${size}/${color || 'Default'}) is out of stock.`);
+                return;
+              }
+              if (itemInfo.quantity > maxStock) {
+                toast.error(`"${itemInfo.name}" (${size}/${color || 'Default'}) exceeds available stock (${maxStock}). Please adjust your cart.`);
+                return;
+              }
+
               orderItems.push(itemInfo);
             }
           }
         }
+      }
+
+      if (orderItems.length === 0) {
+        toast.error("Your cart is empty");
+        return;
       }
 
       let orderData = {
@@ -70,7 +92,7 @@ const PlaceOrder = () => {
 
       switch (method) {
         // API Calls for COD
-        case "cod":
+        case "cod": {
           const response = await axios.post(
             backendUrl + "/api/order/place",
             orderData,
@@ -79,11 +101,14 @@ const PlaceOrder = () => {
 
           if (response.data.success) {
             setCartItems({});
+            localStorage.removeItem("cartItems");
+            toast.success("Order Placed Successfully!");
             navigate("/orders");
           } else {
             toast.error(response.data.message);
           }
           break;
+        }
       }
       
     } catch (error) {

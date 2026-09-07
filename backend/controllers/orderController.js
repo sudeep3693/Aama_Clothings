@@ -18,6 +18,39 @@ const placeOrder = async (req, res) => {
       where: { id: { in: productIds } },
     });
 
+    // Validate stock before proceeding
+    for (const cartItem of items) {
+      const pId = cartItem._id || cartItem.id;
+      const matchedProduct = dbProducts.find((p) => p.id === pId);
+      if (!matchedProduct) {
+        return res.json({ success: false, message: `Product not found: ${cartItem.name || pId}` });
+      }
+
+      const orderedQty = Number(cartItem.quantity || 1);
+      const parsedVariants = typeof matchedProduct.variants === 'string'
+        ? JSON.parse(matchedProduct.variants)
+        : (matchedProduct.variants || []);
+
+      if (cartItem.size && cartItem.color && Array.isArray(parsedVariants) && parsedVariants.length > 0) {
+        const variant = parsedVariants.find(v => v.size === cartItem.size && v.color === cartItem.color);
+        if (variant && variant.quantity !== undefined && variant.quantity !== null) {
+          if (orderedQty > variant.quantity) {
+            return res.json({
+              success: false,
+              message: `Requested quantity for "${matchedProduct.name}" (${cartItem.size}/${cartItem.color}) exceeds available stock (${variant.quantity}).`,
+            });
+          }
+        }
+      }
+
+      if (matchedProduct.stockQuantity > 0 && orderedQty > matchedProduct.stockQuantity) {
+        return res.json({
+          success: false,
+          message: `Requested quantity for "${matchedProduct.name}" exceeds available stock (${matchedProduct.stockQuantity}).`,
+        });
+      }
+    }
+
     const frozenItemsSnapshot = items.map((cartItem) => {
       const pId = cartItem._id || cartItem.id;
       const matchedProduct = dbProducts.find((p) => p.id === pId);

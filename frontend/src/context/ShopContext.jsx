@@ -18,6 +18,27 @@ const ShopContextProvider = (props) => {
   const [token, setToken] = useState("");
   const navigate = useNavigate();
 
+  const getMaxStock = (product, size, color) => {
+    if (!product) return 0;
+    let variants = product.variants;
+    if (typeof variants === "string") {
+      try {
+        variants = JSON.parse(variants);
+      } catch (e) {
+        variants = [];
+      }
+    }
+    if (Array.isArray(variants) && variants.length > 0) {
+      const matched = variants.find(
+        (v) => (!size || v.size === size) && (!color || v.color === color)
+      );
+      if (matched && matched.quantity !== undefined && matched.quantity !== null) {
+        return Number(matched.quantity);
+      }
+    }
+    return Number(product.stockQuantity ?? 0);
+  };
+
   const addToCart = async (itemId, size, color) => {
     if (!size) {
       toast.error("Select Product Size");
@@ -27,8 +48,23 @@ const ShopContextProvider = (props) => {
       toast.error("Select Product Color");
       return;
     }
-    let cartData = structuredClone(cartItems);
+
+    const itemInfo = products.find((product) => product._id === itemId);
+    const maxStock = getMaxStock(itemInfo, size, color);
     const variantKey = `${size}-${color}`;
+    const currentQty = (cartItems[itemId] && cartItems[itemId][variantKey]) || 0;
+
+    if (maxStock <= 0) {
+      toast.error("This product/variant is out of stock");
+      return;
+    }
+
+    if (currentQty + 1 > maxStock) {
+      toast.error(`Cannot add more. Only ${maxStock} item${maxStock > 1 ? "s" : ""} available in stock.`);
+      return;
+    }
+
+    let cartData = structuredClone(cartItems);
 
     if (cartData[itemId]) {
       if (cartData[itemId][variantKey]) {
@@ -41,6 +77,16 @@ const ShopContextProvider = (props) => {
       cartData[itemId][variantKey] = 1;
     }
     setCartItems(cartData);
+
+    if (!token) {
+      localStorage.setItem("cartItems", JSON.stringify(cartData));
+    }
+
+    toast.success(`Added to cart — ${size} / ${color}`, {
+      position: "bottom-right",
+      autoClose: 2000,
+      hideProgressBar: true,
+    });
 
     if (token) {
       try {
@@ -76,9 +122,34 @@ const ShopContextProvider = (props) => {
     let cartData = structuredClone(cartItems);
     const variantKey = `${size}-${color}`;
 
-    cartData[itemId][variantKey] = quantity;
+    if (quantity > 0) {
+      const itemInfo = products.find((product) => product._id === itemId);
+      const maxStock = getMaxStock(itemInfo, size, color);
+      if (quantity > maxStock) {
+        toast.error(`Only ${maxStock} item${maxStock > 1 ? "s" : ""} available in stock`);
+        quantity = maxStock;
+      }
+    }
+
+    if (quantity <= 0) {
+      if (cartData[itemId]) {
+        delete cartData[itemId][variantKey];
+        if (Object.keys(cartData[itemId]).length === 0) {
+          delete cartData[itemId];
+        }
+      }
+    } else {
+      if (!cartData[itemId]) {
+        cartData[itemId] = {};
+      }
+      cartData[itemId][variantKey] = quantity;
+    }
 
     setCartItems(cartData);
+
+    if (!token) {
+      localStorage.setItem("cartItems", JSON.stringify(cartData));
+    }
 
     if (token) {
       try {
@@ -98,6 +169,7 @@ const ShopContextProvider = (props) => {
     let totalAmount = 0;
     for (const items in cartItems) {
       let itemsInfo = products.find((product) => product._id === items);
+      if (!itemsInfo) continue;
       for (const item in cartItems[items]) {
         try {
           if (cartItems[items][item] > 0) {
@@ -128,19 +200,18 @@ const ShopContextProvider = (props) => {
     }
   };
 
-  const getUserCart = async (userId) => {
+  const getUserCart = async (userToken) => {
     try {
-      const response = await fetch(`http://localhost:4000/api/cart/${userId}`); // Ensure the endpoint is correct
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const response = await axios.post(
+        backendUrl + "/api/cart/get",
+        {},
+        { headers: { token: userToken } }
+      );
+      if (response.data.success) {
+        setCartItems(response.data.cartData || {});
       }
-
-      const data = await response.json(); // This should parse the JSON response
-      return data.cartData; // Access cartData if available
     } catch (error) {
       console.error("Error fetching user cart:", error);
-      return null;
     }
   };
 
@@ -149,11 +220,27 @@ const ShopContextProvider = (props) => {
   }, []);
 
   useEffect(() => {
-    if (!token && localStorage.getItem("token")) {
-      setToken(localStorage.getItem("token"));
-      getUserCart(localStorage.getItem("token"));
+    const storedToken = localStorage.getItem("token");
+    if (storedToken) {
+      setToken(storedToken);
+      getUserCart(storedToken);
+    } else {
+      const storedCart = localStorage.getItem("cartItems");
+      if (storedCart) {
+        try {
+          setCartItems(JSON.parse(storedCart));
+        } catch (e) {
+          console.error(e);
+        }
+      }
     }
   }, []);
+
+  useEffect(() => {
+    if (token) {
+      getUserCart(token);
+    }
+  }, [token]);
 
   const value = {
     products,
@@ -173,6 +260,7 @@ const ShopContextProvider = (props) => {
     backendUrl,
     setToken,
     token,
+    getMaxStock,
   };
 
   return (

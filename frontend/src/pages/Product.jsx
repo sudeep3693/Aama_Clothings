@@ -129,11 +129,14 @@ const Product = () => {
             </div>
           )}
           {(() => {
-            const hasVariants = productData.variants && productData.variants.length > 0;
+            const parsedVariants = typeof productData.variants === "string"
+              ? JSON.parse(productData.variants || "[]")
+              : (productData.variants || []);
+            const hasVariants = Array.isArray(parsedVariants) && parsedVariants.length > 0;
             let currentVariant = null;
 
             if (hasVariants) {
-              currentVariant = productData.variants.find(
+              currentVariant = parsedVariants.find(
                 (v) => v.size === size && v.color === color
               );
             }
