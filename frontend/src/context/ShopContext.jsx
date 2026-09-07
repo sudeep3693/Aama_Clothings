@@ -8,7 +8,7 @@ import axios from "axios";
 export const ShopContext = createContext();
 
 const ShopContextProvider = (props) => {
-  const currency = "₹";
+  const currency = "Rs ";
   const delivery_fee = 10;
   const backendUrl = import.meta.env.VITE_BACKEND_URL;
   const [search, setSearch] = useState("");
@@ -18,21 +18,27 @@ const ShopContextProvider = (props) => {
   const [token, setToken] = useState("");
   const navigate = useNavigate();
 
-  const addToCart = async (itemId, size) => {
+  const addToCart = async (itemId, size, color) => {
     if (!size) {
       toast.error("Select Product Size");
       return;
     }
+    if (!color) {
+      toast.error("Select Product Color");
+      return;
+    }
     let cartData = structuredClone(cartItems);
+    const variantKey = `${size}-${color}`;
+
     if (cartData[itemId]) {
-      if (cartData[itemId][size]) {
-        cartData[itemId][size] += 1;
+      if (cartData[itemId][variantKey]) {
+        cartData[itemId][variantKey] += 1;
       } else {
-        cartData[itemId][size] = 1;
+        cartData[itemId][variantKey] = 1;
       }
     } else {
       cartData[itemId] = {};
-      cartData[itemId][size] = 1;
+      cartData[itemId][variantKey] = 1;
     }
     setCartItems(cartData);
 
@@ -40,7 +46,7 @@ const ShopContextProvider = (props) => {
       try {
         await axios.post(
           backendUrl + "/api/cart/add",
-          { itemId, size },
+          { itemId, size, color },
           { headers: { token } }
         );
       } catch (error) {
@@ -66,20 +72,19 @@ const ShopContextProvider = (props) => {
     return totalCount;
   };
 
-  const updateQuantity = async (itemId, size, quantity) => {
+  const updateQuantity = async (itemId, size, color, quantity) => {
     let cartData = structuredClone(cartItems);
-    cartData[itemId][size] = quantity;
+    const variantKey = `${size}-${color}`;
+
+    cartData[itemId][variantKey] = quantity;
+
     setCartItems(cartData);
 
     if (token) {
       try {
         await axios.post(
           backendUrl + "/api/cart/update",
-          {
-            itemId,
-            size,
-            quantity,
-          },
+          { itemId, size, color, quantity },
           { headers: { token } }
         );
       } catch (error) {

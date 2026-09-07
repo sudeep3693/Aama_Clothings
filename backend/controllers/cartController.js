@@ -3,22 +3,24 @@ import { prisma } from "../config/db.js";
 // add products to user cart
 const addToCart = async (req, res) => {
   try {
-    const { userId, itemId, size } = req.body;
+    const { userId, itemId, size, color } = req.body;
     const userData = await prisma.user.findUnique({ where: { id: userId } });
     if (!userData) {
       return res.json({ success: false, message: "User not found" });
     }
 
     let cartData = structuredClone(userData.cartData || {});
+    const variantKey = color ? `${size}-${color}` : size;
+
     if (cartData[itemId]) {
-      if (cartData[itemId][size]) {
-        cartData[itemId][size] += 1;
+      if (cartData[itemId][variantKey]) {
+        cartData[itemId][variantKey] += 1;
       } else {
-        cartData[itemId][size] = 1;
+        cartData[itemId][variantKey] = 1;
       }
     } else {
       cartData[itemId] = {};
-      cartData[itemId][size] = 1;
+      cartData[itemId][variantKey] = 1;
     }
 
     await prisma.user.update({
@@ -35,17 +37,19 @@ const addToCart = async (req, res) => {
 // update user cart
 const updateCart = async (req, res) => {
   try {
-    const { userId, itemId, size, quantity } = req.body;
+    const { userId, itemId, size, color, quantity } = req.body;
     const userData = await prisma.user.findUnique({ where: { id: userId } });
     if (!userData) {
       return res.json({ success: false, message: "User not found" });
     }
 
     let cartData = structuredClone(userData.cartData || {});
+    const variantKey = color ? `${size}-${color}` : size;
+
     if (!cartData[itemId]) {
       cartData[itemId] = {};
     }
-    cartData[itemId][size] = quantity;
+    cartData[itemId][variantKey] = quantity;
 
     await prisma.user.update({
       where: { id: userId },

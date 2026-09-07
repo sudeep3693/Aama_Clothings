@@ -9,7 +9,7 @@ const Footer = () => {
         <div>
           <img className="mb-5 w-32" src={assets.logo} alt="" />
           <p className="w-full md:w-2/3 text-gray-600">
-          At Elegant, we redefine fashion with an emphasis on grace, poise, and enduring style. Each piece in our collection is thoughtfully crafted to exude sophistication, blending classic aesthetics with modern trends. Whether you’re dressing for a special occasion or elevating your everyday look, Elegant promises designs that make you feel confident, refined, and truly unforgettable.
+          At Aama Collections, we redefine fashion with an emphasis on grace, poise, and enduring style. Each piece in our collection is thoughtfully crafted to exude sophistication, blending classic aesthetics with modern trends. Whether you’re dressing for a special occasion or elevating your everyday look, Aama Collections promises designs that make you feel confident, refined, and truly unforgettable.
           </p>
         </div>
         <div>
@@ -25,14 +25,14 @@ const Footer = () => {
           <p className="text-xl font-medium mb-5">GET IN TOUCH</p>
           <ul className="flex flex-col gap-1 text-gray-600">
             <li>+1-8515-56789</li>
-            <li>contact@foreveryou.com</li>
+            <li>contact@aamacollections.com</li>
           </ul>
         </div>
       </div>
       <div>
         <hr />
         <p className="py-5 text-sm text-center">
-          Copyright 2024@ forever.com - All Right Reserved.
+          Copyright 2026 @ Aasha Technologies - All Rights Reserved.
         </p>
       </div>
     </div>

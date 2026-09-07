@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 /* eslint-disable no-unused-vars */
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { assets } from "../assets/assets";
 import axios from "axios";
 import { backendUrl } from "../App";
@@ -19,20 +19,100 @@ const Add = ({ token }) => {
   const [category, setCategory] = useState("Men");
   const [subCategory, setSubCategory] = useState("Topwear");
   const [bestseller, setBestSeller] = useState(false);
-  const [sizes, setSizes] = useState([]);
+  const [variants, setVariants] = useState([]);
+  const [variantSize, setVariantSize] = useState("S");
+  const [variantColor, setVariantColor] = useState("");
+  const [variantQty, setVariantQty] = useState("");
+  const [published, setPublished] = useState(true);
+
+  const [customCategory, setCustomCategory] = useState("");
+  const [customSubCategory, setCustomSubCategory] = useState("");
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [isCustomSubCategory, setIsCustomSubCategory] = useState(false);
+
+  const [categoriesList, setCategoriesList] = useState([]);
+  const [subCategoriesList, setSubCategoriesList] = useState([]);
+  const [colorsList, setColorsList] = useState([]);
+
+  const fetchOptions = async () => {
+    try {
+      const [catRes, subRes, colRes] = await Promise.all([
+        axios.get(backendUrl + "/api/category/list"),
+        axios.get(backendUrl + "/api/subcategory/list"),
+        axios.get(backendUrl + "/api/color/list"),
+      ]);
+      if (catRes.data.success && catRes.data.categories.length > 0) {
+        setCategoriesList(catRes.data.categories);
+        if (!isCustomCategory) {
+          setCategory(catRes.data.categories[0].name);
+        }
+      }
+      if (subRes.data.success && subRes.data.subCategories.length > 0) {
+        setSubCategoriesList(subRes.data.subCategories);
+        if (!isCustomSubCategory) {
+          setSubCategory(subRes.data.subCategories[0].name);
+        }
+      }
+      if (colRes.data.success && colRes.data.colors.length > 0) {
+        setColorsList(colRes.data.colors);
+        setVariantColor(colRes.data.colors[0].name);
+      }
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchOptions();
+  }, []);
 
   const onSubmitHandler = async (e) => {
     e.preventDefault();
     try {
+      let finalCategory = category;
+      if (isCustomCategory && customCategory.trim()) {
+        finalCategory = customCategory.trim();
+        // Save new category to backend DB
+        await axios
+          .post(
+            backendUrl + "/api/category/add",
+            { name: finalCategory },
+            { headers: { token } }
+          )
+          .catch(() => {});
+      }
+
+      let finalSubCategory = subCategory;
+      if (isCustomSubCategory && customSubCategory.trim()) {
+        finalSubCategory = customSubCategory.trim();
+        // Save new subcategory to backend DB
+        await axios
+          .post(
+            backendUrl + "/api/subcategory/add",
+            { name: finalSubCategory },
+            { headers: { token } }
+          )
+          .catch(() => {});
+      }
+
       const formData = new FormData();
       formData.append("name", name);
       formData.append("description", description);
       formData.append("price", price);
       formData.append("discount", discount);
-      formData.append("category", category);
-      formData.append("subCategory", subCategory);
+      formData.append("category", finalCategory);
+      formData.append("subCategory", finalSubCategory);
       formData.append("bestseller", bestseller);
-      formData.append("sizes", JSON.stringify(sizes));
+      
+      const computedStockQuantity = variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0);
+      formData.append("stockQuantity", computedStockQuantity);
+      
+      const allSizes = [...new Set(variants.map(v => v.size))];
+      const allColors = [...new Set(variants.map(v => v.color))];
+      formData.append("sizes", JSON.stringify(allSizes));
+      formData.append("colors", JSON.stringify(allColors));
+      formData.append("variants", JSON.stringify(variants));
+      formData.append("published", published);
 
       image1 && formData.append("image1", image1);
       image2 && formData.append("image2", image2);
@@ -55,6 +135,15 @@ const Add = ({ token }) => {
         setImage4(false);
         setPrice("");
         setDiscount("");
+        setVariants([]);
+        setVariantSize("S");
+        setVariantColor("");
+        setVariantQty("");
+        setCustomCategory("");
+        setCustomSubCategory("");
+        setIsCustomCategory(false);
+        setIsCustomSubCategory(false);
+        fetchOptions();
       } else {
         toast.error(response.data.message);
       }
@@ -153,25 +242,69 @@ const Add = ({ token }) => {
         <div>
           <p className="mb-2">Product category</p>
           <select
-            onChange={(e) => setCategory(e.target.value)}
+            value={isCustomCategory ? "ADD_NEW" : category}
+            onChange={(e) => {
+              if (e.target.value === "ADD_NEW") {
+                setIsCustomCategory(true);
+              } else {
+                setIsCustomCategory(false);
+                setCategory(e.target.value);
+              }
+            }}
             className="w-full px-3 py-2"
           >
-            <option value="Men">Men</option>
-            <option value="Women">Women</option>
-            <option value="Kids">Kids</option>
+            {categoriesList.map((item) => (
+              <option key={item.id} value={item.name}>
+                {item.name}
+              </option>
+            ))}
+            <option value="ADD_NEW">+ Add New Category...</option>
           </select>
+          {isCustomCategory && (
+            <input
+              type="text"
+              placeholder="Type new category name"
+              value={customCategory}
+              onChange={(e) => setCustomCategory(e.target.value)}
+              className="mt-2 border px-3 py-1.5 w-full rounded text-sm"
+              required
+            />
+          )}
         </div>
+
         <div>
-          <p className="mb-2">Sub category</p>
+          <p className="mb-2">Sub category (Type)</p>
           <select
-            onChange={(e) => setSubCategory(e.target.value)}
+            value={isCustomSubCategory ? "ADD_NEW" : subCategory}
+            onChange={(e) => {
+              if (e.target.value === "ADD_NEW") {
+                setIsCustomSubCategory(true);
+              } else {
+                setIsCustomSubCategory(false);
+                setSubCategory(e.target.value);
+              }
+            }}
             className="w-full px-3 py-2"
           >
-            <option value="Topwear">Topwear</option>
-            <option value="Bottomwear">Bottomwear</option>
-            <option value="Winterwear">Winterwear</option>
+            {subCategoriesList.map((item) => (
+              <option key={item.id} value={item.name}>
+                {item.name}
+              </option>
+            ))}
+            <option value="ADD_NEW">+ Add New SubCategory...</option>
           </select>
+          {isCustomSubCategory && (
+            <input
+              type="text"
+              placeholder="Type new subcategory name"
+              value={customSubCategory}
+              onChange={(e) => setCustomSubCategory(e.target.value)}
+              className="mt-2 border px-3 py-1.5 w-full rounded text-sm"
+              required
+            />
+          )}
         </div>
+
         <div>
           <p className="mb-2">Product Price</p>
           <input
@@ -196,107 +329,110 @@ const Add = ({ token }) => {
           />
         </div>
       </div>
+
       <div>
-        <p className="mb-2">Product Sizes</p>
-        <div className="flex gap-3">
-          <div
-            onClick={() =>
-              setSizes((prev) =>
-                prev.includes("S")
-                  ? prev.filter((item) => item !== "S")
-                  : [...prev, "S"]
-              )
-            }
-          >
-            <p
-              className={`${
-                sizes.includes("S") ? "bg-pink-100" : "bg-slate-200"
-              } px-3 py-1 cursor-pointer`}
+        <p className="mb-2">Product Variants (Size, Color, Quantity)</p>
+        <div className="flex gap-3 mb-3 items-end">
+          <div>
+            <p className="text-xs mb-1">Size</p>
+            <select
+              value={variantSize}
+              onChange={(e) => setVariantSize(e.target.value)}
+              className="border px-2 py-1 rounded"
             >
-              S
-            </p>
+              {["S", "M", "L", "XL", "XXL"].map((sz) => (
+                <option key={sz} value={sz}>{sz}</option>
+              ))}
+            </select>
           </div>
-          <div
-            onClick={() =>
-              setSizes((prev) =>
-                prev.includes("M")
-                  ? prev.filter((item) => item !== "M")
-                  : [...prev, "M"]
-              )
-            }
+          <div>
+            <p className="text-xs mb-1">Color</p>
+            {colorsList.length > 0 ? (
+              <select
+                value={variantColor}
+                onChange={(e) => setVariantColor(e.target.value)}
+                className="border px-2 py-1 rounded w-28"
+              >
+                {colorsList.map((c) => (
+                  <option key={c.id} value={c.name}>{c.name}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                placeholder="e.g. Red"
+                value={variantColor}
+                onChange={(e) => setVariantColor(e.target.value)}
+                className="border px-2 py-1 rounded w-24"
+              />
+            )}
+          </div>
+          <div>
+            <p className="text-xs mb-1">Qty</p>
+            <input
+              type="number"
+              min="0"
+              placeholder="0"
+              value={variantQty}
+              onChange={(e) => setVariantQty(e.target.value)}
+              className="border px-2 py-1 rounded w-16"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (variantColor && variantQty !== "") {
+                setVariants([...variants, { size: variantSize, color: variantColor, quantity: Number(variantQty) }]);
+                setVariantColor("");
+                setVariantQty("");
+              } else {
+                toast.error("Please enter a color and quantity");
+              }
+            }}
+            className="bg-black text-white px-3 py-1 rounded text-sm mb-[1px]"
           >
-            <p
-              className={`${
-                sizes.includes("M") ? "bg-pink-100" : "bg-slate-200"
-              } px-3 py-1 cursor-pointer`}
-            >
-              M
-            </p>
-          </div>
-          <div
-            onClick={() =>
-              setSizes((prev) =>
-                prev.includes("L")
-                  ? prev.filter((item) => item !== "L")
-                  : [...prev, "L"]
-              )
-            }
-          >
-            <p
-              className={`${
-                sizes.includes("L") ? "bg-pink-100" : "bg-slate-200"
-              } px-3 py-1 cursor-pointer`}
-            >
-              L
-            </p>
-          </div>
-          <div
-            onClick={() =>
-              setSizes((prev) =>
-                prev.includes("XL")
-                  ? prev.filter((item) => item !== "XL")
-                  : [...prev, "XL"]
-              )
-            }
-          >
-            <p
-              className={`${
-                sizes.includes("XL") ? "bg-pink-100" : "bg-slate-200"
-              } px-3 py-1 cursor-pointer`}
-            >
-              XL
-            </p>
-          </div>
-          <div
-            onClick={() =>
-              setSizes((prev) =>
-                prev.includes("XXL")
-                  ? prev.filter((item) => item !== "XXL")
-                  : [...prev, "XXL"]
-              )
-            }
-          >
-            <p
-              className={`${
-                sizes.includes("XXL") ? "bg-pink-100" : "bg-slate-200"
-              } px-3 py-1 cursor-pointer`}
-            >
-              XXL
-            </p>
-          </div>
+            Add Variant
+          </button>
+        </div>
+        <div className="flex flex-col gap-2 max-w-sm">
+          {variants.map((v, idx) => (
+            <div key={idx} className="flex justify-between items-center bg-slate-100 px-3 py-2 rounded text-sm border">
+              <span>{v.size} / {v.color} - Qty: {v.quantity}</span>
+              <button
+                type="button"
+                onClick={() => setVariants(variants.filter((_, i) => i !== idx))}
+                className="text-red-500 font-bold hover:text-red-700"
+              >
+                X
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="flex gap-2 mt-2">
-        <input
-          onChange={() => setBestSeller((prev) => !prev)}
-          checked={bestseller}
-          type="checkbox"
-          id="bestseller"
-        />
-        <label className="cursor-pointer" htmlFor="bestseller">
-          Add to bestseller
-        </label>
+      <div className="flex flex-wrap gap-6 mt-2">
+        <div className="flex gap-2">
+          <input
+            onChange={() => setBestSeller((prev) => !prev)}
+            checked={bestseller}
+            type="checkbox"
+            id="bestseller"
+          />
+          <label className="cursor-pointer" htmlFor="bestseller">
+            Add to bestseller
+          </label>
+        </div>
+        <div className="flex gap-2">
+          <input
+            onChange={() => setPublished((prev) => !prev)}
+            checked={published}
+            type="checkbox"
+            id="published"
+          />
+          <label className="cursor-pointer font-medium text-green-700" htmlFor="published">
+            Publish Immediately
+          </label>
+        </div>
       </div>
 
       <button type="submit" className="w-28 py-3 mt-4 bg-black text-white">

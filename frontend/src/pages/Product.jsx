@@ -11,6 +11,7 @@ const Product = () => {
   const [productData, setProductData] = useState(false);
   const [image, setImage] = useState("");
   const [size, setSize] = useState("");
+  const [color, setColor] = useState("");
 
   const fetchProductData = async () => {
     products.map((item) => {
@@ -76,13 +77,27 @@ const Product = () => {
               {productData.price}
             </p>
           )}
-          <p className="mt-5 text-gray-500 md:w-4/5">
+
+          {/* Stock Status Badge */}
+          <div className="mt-3">
+            {productData.stockQuantity <= 0 ? (
+              <span className="inline-block bg-red-100 text-red-700 text-xs font-semibold px-3 py-1 rounded">
+                Currently Out of Stock
+              </span>
+            ) : (
+              <span className="inline-block bg-green-100 text-green-700 text-xs font-semibold px-3 py-1 rounded">
+                In Stock & Ready to Ship
+              </span>
+            )}
+          </div>
+
+          <p className="mt-4 text-gray-500 md:w-4/5">
             {productData.description}
           </p>
           <div className="flex flex-col gap-4 my-8">
             <p>Select Size</p>
             <div className="flex gap-2">
-              {productData.sizes.map((item, index) => (
+              {productData.sizes?.map((item, index) => (
                 <button
                   onClick={() => setSize(item)}
                   className={`border py-2 px-4 bg-gray-100 ${
@@ -95,12 +110,70 @@ const Product = () => {
               ))}
             </div>
           </div>
-          <button
-            onClick={() => addToCart(productData._id, size)}
-            className="bg-black text-white px-8 py-3 text-sm active:bg-gray-700"
-          >
-            ADD TO CART
-          </button>
+          {productData.colors && productData.colors.length > 0 && (
+            <div className="flex flex-col gap-4 my-8">
+              <p>Select Color</p>
+              <div className="flex gap-2">
+                {productData.colors.map((item, index) => (
+                  <button
+                    onClick={() => setColor(item)}
+                    className={`border py-2 px-4 bg-gray-100 ${
+                      item === color ? "border-orange-500" : ""
+                    }`}
+                    key={index}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {(() => {
+            const hasVariants = productData.variants && productData.variants.length > 0;
+            let currentVariant = null;
+
+            if (hasVariants) {
+              currentVariant = productData.variants.find(
+                (v) => v.size === size && v.color === color
+              );
+            }
+
+            const isOutOfStock = hasVariants
+              ? (size && color ? (currentVariant ? currentVariant.quantity <= 0 : true) : false)
+              : productData.stockQuantity <= 0;
+
+            const currentQty = hasVariants && currentVariant ? currentVariant.quantity : productData.stockQuantity;
+            const showLowStock = (size && color && hasVariants) || !hasVariants
+              ? currentQty > 0 && currentQty < 10
+              : false;
+
+            if (productData.stockQuantity <= 0 || isOutOfStock) {
+              return (
+                <button
+                  disabled
+                  className="bg-gray-400 text-white px-8 py-3 text-sm cursor-not-allowed rounded"
+                >
+                  OUT OF STOCK
+                </button>
+              );
+            }
+
+            return (
+              <>
+                {showLowStock && (
+                  <p className="text-amber-600 font-semibold text-sm mb-3 animate-pulse">
+                    ⚠️ Only {currentQty} left in stock — order soon!
+                  </p>
+                )}
+                <button
+                  onClick={() => addToCart(productData._id, size, color)}
+                  className="bg-black text-white px-8 py-3 text-sm active:bg-gray-700 hover:bg-gray-800 transition-colors rounded"
+                >
+                  ADD TO CART
+                </button>
+              </>
+            );
+          })()}
           <hr className="mt-8 sm:w-4/5" />
           <div className="text-sm text-gray-500 mt-5 flex flex-col gap-1">
             <p>100 Original product.</p>

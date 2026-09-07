@@ -19,7 +19,7 @@ const About = () => {
         />
         <div className="flex flex-col justify-center gap-6 md:w-2/4 text-gray-600">
           <p>
-            Forever was born out of a passion for innovation and a desire to
+            Aama Collections was born out of a passion for innovation and a desire to
             revolutionize the way people shop online. Our journey began with a
             simple idea: to provide a platform where customers can easily
             discover, explore, and purchase a wide range of products from the
@@ -28,13 +28,13 @@ const About = () => {
           <p>
             Since our inception, we've worked tirelessly to curate a diverse
             selection of high-quality products that cater to every taste and
-            preference. From fashion and beauty to electronics and home
+            preference. From fashion and beauty to home
             essentials, we offer an extensive collection sourced from trusted
             brands and suppliers.
           </p>
           <b className="text-gray-800">Our Mission</b>
           <p>
-            Our mission at Forever is to empower customers with choice,
+            Our mission at Aama Collections is to empower customers with choice,
             convenience, and confidence. We're dedicated to providing a seamless
             shopping experience that exceeds expectations, from browsing and
             ordering to delivery and beyond.

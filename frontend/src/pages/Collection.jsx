@@ -1,17 +1,46 @@
-/* eslint-disable no-unused-vars */
 import React, { useContext, useEffect, useState } from "react";
 import { ShopContext } from "../context/ShopContext";
 import { assets } from "../assets/assets";
 import Title from "../components/Title";
 import ProductItem from "../components/ProductItem";
+import axios from "axios";
 
 const Collection = () => {
-  const { products, search, showSearch } = useContext(ShopContext);
+  const { products, search, showSearch, backendUrl } = useContext(ShopContext);
   const [showFilter, setShowFilter] = useState(false);
   const [filterProducts, setFilterProducts] = useState([]);
   const [category, setCategory] = useState([]);
   const [subCategory, setSubCategory] = useState([]);
   const [sortType, setSortType] = useState("relavent");
+
+  const [categoriesList, setCategoriesList] = useState([]);
+  const [subCategoriesList, setSubCategoriesList] = useState([]);
+
+  useEffect(() => {
+    const fetchDynamicFilters = async () => {
+      try {
+        const [catRes, subRes] = await Promise.all([
+          axios.get(backendUrl + "/api/category/list"),
+          axios.get(backendUrl + "/api/subcategory/list"),
+        ]);
+        if (catRes.data.success && catRes.data.categories.length > 0) {
+          setCategoriesList(catRes.data.categories.map((c) => c.name));
+        } else {
+          setCategoriesList(["Men", "Women", "Kids"]);
+        }
+        if (subRes.data.success && subRes.data.subCategories.length > 0) {
+          setSubCategoriesList(subRes.data.subCategories.map((s) => s.name));
+        } else {
+          setSubCategoriesList(["Topwear", "Bottomwear", "Winterwear"]);
+        }
+      } catch (error) {
+        console.log(error);
+        setCategoriesList(["Men", "Women", "Kids"]);
+        setSubCategoriesList(["Topwear", "Bottomwear", "Winterwear"]);
+      }
+    };
+    fetchDynamicFilters();
+  }, [backendUrl]);
 
   const toggleCategory = (e) => {
     if (category.includes(e.target.value)) {
@@ -100,33 +129,17 @@ const Collection = () => {
         >
           <p className="mb-3 text-sm font-medium">CATEGORIES</p>
           <div className="flex flex-col gap-2 text-sm font-light text-gray-700">
-            <p className="flex gap-2">
-              <input
-                className="w-3"
-                type="checkbox"
-                value={"Men"}
-                onChange={toggleCategory}
-              />
-              Men
-            </p>
-            <p className="flex gap-2">
-              <input
-                className="w-3"
-                type="checkbox"
-                value={"Women"}
-                onChange={toggleCategory}
-              />
-              Women
-            </p>
-            <p className="flex gap-2">
-              <input
-                className="w-3"
-                type="checkbox"
-                value={"Kids"}
-                onChange={toggleCategory}
-              />
-              Kids
-            </p>
+            {categoriesList.map((cat, idx) => (
+              <p className="flex gap-2" key={idx}>
+                <input
+                  className="w-3"
+                  type="checkbox"
+                  value={cat}
+                  onChange={toggleCategory}
+                />
+                {cat}
+              </p>
+            ))}
           </div>
         </div>
         {/* SubCategory Filter */}
@@ -137,33 +150,17 @@ const Collection = () => {
         >
           <p className="mb-3 text-sm font-medium">TYPE</p>
           <div className="flex flex-col gap-2 text-sm font-light text-gray-700">
-            <p className="flex gap-2">
-              <input
-                className="w-3"
-                type="checkbox"
-                value={"Topwear"}
-                onChange={toogleSubCategory}
-              />
-              Topwear
-            </p>
-            <p className="flex gap-2">
-              <input
-                className="w-3"
-                type="checkbox"
-                value={"Bottomwear"}
-                onChange={toogleSubCategory}
-              />
-              Bottomwear
-            </p>
-            <p className="flex gap-2">
-              <input
-                className="w-3"
-                type="checkbox"
-                value={"Winterwear"}
-                onChange={toogleSubCategory}
-              />
-              Winterwear
-            </p>
+            {subCategoriesList.map((sub, idx) => (
+              <p className="flex gap-2" key={idx}>
+                <input
+                  className="w-3"
+                  type="checkbox"
+                  value={sub}
+                  onChange={toogleSubCategory}
+                />
+                {sub}
+              </p>
+            ))}
           </div>
         </div>
       </div>
@@ -191,6 +188,8 @@ const Collection = () => {
               price={item.price}
               image={item.image}
               discount={item.discount}
+              stockStatus={item.stockStatus}
+              stockQuantity={item.stockQuantity ?? 0}
             />
           ))}
         </div>

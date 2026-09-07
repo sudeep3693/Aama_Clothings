@@ -1,17 +1,61 @@
 import { prisma } from "../config/db.js";
 
 // global variables
-const currency = "inr";
 const deliveryCharge = 50;
 
-// Placing orders using COD Method
+// Placing orders using COD Method with Immutable Price Snapshot
 const placeOrder = async (req, res) => {
   try {
-    const { userId, items, amount, address } = req.body;
+    const { userId, items, address } = req.body;
+
+    if (!items || items.length === 0) {
+      return res.json({ success: false, message: "No items in order" });
+    }
+
+    // Extract product IDs and query current DB records to freeze price snapshots
+    const productIds = items.map((i) => i._id || i.id).filter(Boolean);
+    const dbProducts = await prisma.product.findMany({
+      where: { id: { in: productIds } },
+    });
+
+    const frozenItemsSnapshot = items.map((cartItem) => {
+      const pId = cartItem._id || cartItem.id;
+      const matchedProduct = dbProducts.find((p) => p.id === pId);
+
+      const originalUnitPrice = matchedProduct ? matchedProduct.price : Number(cartItem.price || 0);
+      const discountPercentage = matchedProduct ? (matchedProduct.discount || 0) : Number(cartItem.discount || 0);
+
+      const purchasedUnitPrice = discountPercentage > 0
+        ? Math.round(originalUnitPrice * (1 - discountPercentage / 100))
+        : originalUnitPrice;
+
+      const qty = Number(cartItem.quantity || 1);
+
+      return {
+        ...cartItem,
+        _id: pId,
+        productId: pId,
+        name: matchedProduct ? matchedProduct.name : (cartItem.name || "Product"),
+        image: matchedProduct ? matchedProduct.image : (cartItem.image || []),
+        category: matchedProduct ? matchedProduct.category : (cartItem.category || ""),
+        subCategory: matchedProduct ? matchedProduct.subCategory : (cartItem.subCategory || ""),
+        size: cartItem.size,
+        quantity: qty,
+        originalUnitPrice: originalUnitPrice,
+        discountPercentage: discountPercentage,
+        purchasedUnitPrice: purchasedUnitPrice, // Price snapshot frozen at purchase time
+        price: purchasedUnitPrice, // Standardized unit price snapshot
+        lineTotal: purchasedUnitPrice * qty,
+      };
+    });
+
+    const itemsTotal = frozenItemsSnapshot.reduce((acc, item) => acc + item.lineTotal, 0);
+    const finalAmount = itemsTotal + deliveryCharge;
+
     const orderData = {
       userId,
-      items,
-      amount: Number(amount),
+      items: frozenItemsSnapshot,
+      amount: finalAmount,
       paymentMethod: "COD",
       payment: false,
       date: BigInt(Date.now()),
@@ -24,7 +68,49 @@ const placeOrder = async (req, res) => {
       where: { id: userId },
       data: { cartData: {} },
     });
-    res.json({ success: true, message: "Order Placed" });
+
+    // Decrement stockQuantity for each ordered product and auto-mark OUT_OF_STOCK if depleted
+    for (const cartItem of frozenItemsSnapshot) {
+      const pId = cartItem.productId || cartItem._id;
+      const orderedQty = Number(cartItem.quantity || 1);
+      if (!pId) continue;
+
+      const prod = dbProducts.find((p) => p.id === pId);
+      if (!prod) continue;
+
+      // Only track quantity if it was explicitly set (> 0 means tracking is enabled)
+      let updateData = {};
+      let needsUpdate = false;
+
+      if (prod.stockQuantity > 0) {
+        const newQty = Math.max(0, prod.stockQuantity - orderedQty);
+        updateData.stockQuantity = newQty;
+        needsUpdate = true;
+      }
+
+      const sizeStr = cartItem.size;
+      const colorStr = cartItem.color;
+
+      // Decrement specific size-color variant quantity
+      const parsedVariants = typeof prod.variants === 'string' ? JSON.parse(prod.variants) : (prod.variants || []);
+      if (sizeStr && colorStr && parsedVariants.length > 0) {
+        const variantIndex = parsedVariants.findIndex(v => v.size === sizeStr && v.color === colorStr);
+        if (variantIndex !== -1 && parsedVariants[variantIndex].quantity > 0) {
+          parsedVariants[variantIndex].quantity = Math.max(0, parsedVariants[variantIndex].quantity - orderedQty);
+          updateData.variants = parsedVariants;
+          needsUpdate = true;
+        }
+      }
+
+      if (needsUpdate) {
+        await prisma.product.update({
+          where: { id: pId },
+          data: updateData,
+        });
+      }
+    }
+
+    res.json({ success: true, message: "Order Placed Successfully" });
 
   } catch (error) {
     console.log(error);
@@ -35,7 +121,9 @@ const placeOrder = async (req, res) => {
 // All Orders data for Admin Panel
 const allOrders = async (req, res) => {
   try {
-    const rawOrders = await prisma.order.findMany({});
+    const rawOrders = await prisma.order.findMany({
+      orderBy: { date: "desc" },
+    });
     const orders = rawOrders.map((item) => ({
       ...item,
       _id: item.id,
@@ -52,7 +140,10 @@ const allOrders = async (req, res) => {
 const userOrders = async (req, res) => {
   try {
     const { userId } = req.body;
-    const rawOrders = await prisma.order.findMany({ where: { userId } });
+    const rawOrders = await prisma.order.findMany({
+      where: { userId },
+      orderBy: { date: "desc" },
+    });
     const orders = rawOrders.map((item) => ({
       ...item,
       _id: item.id,

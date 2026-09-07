@@ -35,6 +35,8 @@ const RelatedProducts = ({ category, subCategory }) => {
             name={item.name}
             price={item.price}
             discount={item.discount}
+            stockStatus={item.stockStatus}
+            stockQuantity={item.stockQuantity ?? 0}
           />
         ))}
       </div>

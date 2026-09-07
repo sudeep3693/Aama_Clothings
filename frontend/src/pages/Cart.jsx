@@ -17,9 +17,11 @@ const Cart = () => {
       for (const items in cartItems) {
         for (const item in cartItems[items]) {
           if (cartItems[items][item] > 0) {
+            const [size, color] = item.split("-");
             tempData.push({
               _id: items,
-              size: item,
+              size: size,
+              color: color || "",
               quantity: cartItems[items][item],
             });
           }
@@ -72,6 +74,11 @@ const Cart = () => {
                     <p className="px-2 sm:px-3 sm:py-1 border bg-slate-50">
                       {item.size}
                     </p>
+                    {item.color && (
+                      <p className="px-2 sm:px-3 sm:py-1 border bg-slate-50">
+                        {item.color}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -80,10 +87,11 @@ const Cart = () => {
                   e.target.value === "" || e.target.value === "0"
                     ? null
                     : updateQuantity(
-                        item._id,
-                        item.size,
-                        Number(e.target.value)
-                      )
+                      item._id,
+                      item.size,
+                      item.color,
+                      Number(e.target.value)
+                    )
                 }
                 className="border max-w-10 sm:max-w-20 px-1 sm:px-2 py-1"
                 type="number"
@@ -91,7 +99,7 @@ const Cart = () => {
                 defaultValue={item.quantity}
               />
               <img
-                onClick={() => updateQuantity(item._id, item.size, 0)}
+                onClick={() => updateQuantity(item._id, item.size, item.color, 0)}
                 className="w-4 mr-4 sm:w-5 cursor-pointer"
                 src={assets.bin_icon}
                 alt=""

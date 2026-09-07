@@ -16,17 +16,21 @@ model User {
 }
 
 model Product {
-  id          String  @id @default(uuid())
-  name        String
-  description String  @db.Text
-  price       Float
-  image       Json
-  category    String
-  subCategory String
-  sizes       Json
-  bestseller  Boolean @default(false)
-  discount    Float   @default(0)
-  date        BigInt
+  id              String  @id @default(uuid())
+  name            String
+  description     String  @db.Text
+  price           Float
+  image           Json
+  category        String
+  subCategory     String
+  sizes           Json
+  colors          Json    @default("[]")
+  variants        Json    @default("[]")
+  bestseller      Boolean @default(false)
+  discount        Float   @default(0)
+  stockQuantity   Int     @default(0)
+  published       Boolean @default(true)
+  date            BigInt
 }
 
 model Order {
@@ -39,4 +43,19 @@ model Order {
   paymentMethod String
   payment       Boolean @default(false)
   date          BigInt
+}
+
+model Category {
+  id   String @id @default(uuid())
+  name String @unique
+}
+
+model SubCategory {
+  id   String @id @default(uuid())
+  name String @unique
+}
+
+model Color {
+  id   String @id @default(uuid())
+  name String @unique
 }
