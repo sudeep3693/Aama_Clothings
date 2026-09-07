@@ -1,6 +1,7 @@
-/* eslint-disable react/prop-types */
 import React, { useState, useEffect, useMemo } from "react";
 import { NEPAL_CITIES, NEPAL_PROVINCES } from "../data/nepalLocations";
+import axios from "axios";
+import { backendUrl } from "../App";
 
 const ShippingLabelModal = ({ order, orders = [], currency, onClose }) => {
   // Normalize order list: if orders array is provided, use it; otherwise wrap single order
@@ -14,6 +15,7 @@ const ShippingLabelModal = ({ order, orders = [], currency, onClose }) => {
   const [activeSender, setActiveSender] = useState(null);
   const [isConfiguringSender, setIsConfiguringSender] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0); // For batch preview pagination
+  const [loyaltyMap, setLoyaltyMap] = useState({});
 
   // Form state for creating/editing sender
   const [senderForm, setSenderForm] = useState({
@@ -26,6 +28,30 @@ const ShippingLabelModal = ({ order, orders = [], currency, onClose }) => {
     country: "Nepal",
     note: "Main Warehouse",
   });
+
+  // Fetch customer loyalty mappings
+  useEffect(() => {
+    const fetchLoyalty = async () => {
+      try {
+        const token = localStorage.getItem("token") || "";
+        if (!token) return;
+        const res = await axios.get(`${backendUrl}/api/customer/list`, {
+          headers: { token },
+        });
+        if (res.data.success && res.data.customers) {
+          const map = {};
+          res.data.customers.forEach((c) => {
+            if (c.id) map[c.id] = { ...c.currentLevel, totalSpend: c.totalSpend, totalOrders: c.totalOrders, name: c.name };
+            if (c.email) map[c.email.toLowerCase()] = { ...c.currentLevel, totalSpend: c.totalSpend, totalOrders: c.totalOrders, name: c.name };
+          });
+          setLoyaltyMap(map);
+        }
+      } catch (e) {
+        console.error("Error fetching loyalty in shipping label:", e);
+      }
+    };
+    fetchLoyalty();
+  }, []);
 
   // Load saved sender locations on mount
   useEffect(() => {
@@ -284,7 +310,7 @@ const ShippingLabelModal = ({ order, orders = [], currency, onClose }) => {
 
           {/* CRITICAL NEPAL LANDMARK BOX */}
           {ord.address?.landmark && (
-            <div className="my-1.5 p-1 bg-yellow-50 border-2 border-dashed border-black text-center">
+            <div className="my-1 p-1 bg-yellow-50 border-2 border-dashed border-black text-center">
               <p className="text-[8px] uppercase tracking-wider font-extrabold text-gray-600">
                 📍 Nearest Delivery Landmark:
               </p>
@@ -293,6 +319,39 @@ const ShippingLabelModal = ({ order, orders = [], currency, onClose }) => {
               </p>
             </div>
           )}
+
+          {/* CUSTOMER PURCHASE LEVEL & REWARD / LETTER NOTICE */}
+          {(() => {
+            let applied = null;
+            if (ord.rewardApplied) {
+              if (typeof ord.rewardApplied === "object") applied = ord.rewardApplied;
+              else {
+                try { applied = JSON.parse(ord.rewardApplied); } catch { applied = null; }
+              }
+            }
+
+            const loyalty = loyaltyMap[ord.userId] || loyaltyMap[ord.address?.email?.toLowerCase()];
+            if (!applied && !loyalty) return null;
+
+            return (
+              <div className="my-1 px-1.5 py-1 bg-gray-50 border border-black flex items-center justify-between text-[8.5px]">
+                <div className="flex items-center gap-1 font-bold">
+                  <span>{applied?.levelIcon || loyalty?.badgeIcon || "⭐"}</span>
+                  <span className="uppercase font-black text-black">
+                    {applied?.levelName || loyalty?.name || `VIP Level`}
+                  </span>
+                  {loyalty && (
+                    <span className="text-gray-600 font-normal">
+                      (Spend: {currency}{loyalty.totalSpend?.toLocaleString() || 0})
+                    </span>
+                  )}
+                </div>
+                <div className="font-black text-black uppercase text-[8px] bg-white px-1.5 py-0.5 border border-black">
+                  {applied?.title ? `🎁 REWARD: ${applied.title} (${applied.usage || "Applied"})` : `🎁 ${loyalty?.rewardTitle || "Loyalty Member"}`}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* PACKAGE CONTENT SUMMARY TABLE WITH RATE & LINE TOTALS */}
           <div className="my-1.5">
@@ -352,6 +411,12 @@ const ShippingLabelModal = ({ order, orders = [], currency, onClose }) => {
                 <span>Items Subtotal ({totalQtyCount} pcs):</span>
                 <span className="font-semibold text-black">{currency} {itemsSubtotal}</span>
               </div>
+              {Number(ord.loyaltyDiscount || 0) > 0 && (
+                <div className="flex justify-between items-center text-black font-bold">
+                  <span>VIP Level Reward Discount:</span>
+                  <span className="text-black">-{currency} {ord.loyaltyDiscount}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center text-gray-700">
                 <span>Delivery / Shipping Fee:</span>
                 <span className="font-semibold text-black">

@@ -30,6 +30,24 @@ const Sidebar = () => {
         </NavLink>
         <NavLink
           className="flex items-center gap-3 border border-gray-300 border-r-0 px-3 py-2 rounded-l"
+          to="/customers"
+        >
+          <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <p className="hidden md:block">Customers & Letters</p>
+        </NavLink>
+        <NavLink
+          className="flex items-center gap-3 border border-gray-300 border-r-0 px-3 py-2 rounded-l"
+          to="/loyalty-levels"
+        >
+          <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+          </svg>
+          <p className="hidden md:block">Loyalty Levels</p>
+        </NavLink>
+        <NavLink
+          className="flex items-center gap-3 border border-gray-300 border-r-0 px-3 py-2 rounded-l"
           to="/categories"
         >
           <img className="w-5 h-5" src={assets.add_icon} alt="" />

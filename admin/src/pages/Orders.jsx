@@ -28,6 +28,26 @@ const Orders = ({ token }) => {
 
   // Selected orders for checkbox bulk operations
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
+  const [customerLoyaltyMap, setCustomerLoyaltyMap] = useState({});
+
+  const fetchCustomerLoyalty = async () => {
+    try {
+      if (!token) return;
+      const res = await axios.get(`${backendUrl}/api/customer/list`, {
+        headers: { token },
+      });
+      if (res.data.success && res.data.customers) {
+        const map = {};
+        res.data.customers.forEach((c) => {
+          if (c.id) map[c.id] = c.currentLevel;
+          if (c.email) map[c.email.toLowerCase()] = c.currentLevel;
+        });
+        setCustomerLoyaltyMap(map);
+      }
+    } catch (e) {
+      console.error("Error fetching loyalty map:", e);
+    }
+  };
 
   const fetchAllOrders = async () => {
     if (!token) {
@@ -81,6 +101,7 @@ const Orders = ({ token }) => {
 
   useEffect(() => {
     fetchAllOrders();
+    fetchCustomerLoyalty();
   }, [token]);
 
   // Real-time status counts
@@ -572,9 +593,29 @@ const Orders = ({ token }) => {
                     </div>
 
                     <div className="space-y-1 text-gray-700">
-                      <p className="font-extrabold text-gray-900 text-sm">
-                        {customerFullName}
-                      </p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-extrabold text-gray-900 text-sm">
+                          {customerFullName}
+                        </p>
+                        {(() => {
+                          const lvl = customerLoyaltyMap[order.userId] || customerLoyaltyMap[order.address?.email?.toLowerCase()];
+                          if (!lvl) return null;
+                          return (
+                            <span
+                              className="px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 shadow-2xs"
+                              style={{
+                                backgroundColor: `${lvl.color || "#3B82F6"}15`,
+                                color: lvl.color || "#3B82F6",
+                                borderColor: `${lvl.color || "#3B82F6"}40`,
+                              }}
+                              title={`Reward: ${lvl.rewardTitle || ""}`}
+                            >
+                              <span>{lvl.badgeIcon || "⭐"}</span>
+                              <span>{lvl.name}</span>
+                            </span>
+                          );
+                        })()}
+                      </div>
                       <p className="font-semibold text-indigo-700 flex items-center gap-1">
                         <span>📞</span> {order.address?.phone}
                       </p>

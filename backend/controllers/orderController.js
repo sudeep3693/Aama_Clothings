@@ -1,4 +1,5 @@
 import { prisma } from "../config/db.js";
+import { calculateUserLoyalty } from "./loyaltyController.js";
 
 // global variables
 const deliveryCharge = 50;
@@ -105,10 +106,46 @@ const placeOrder = async (req, res) => {
       console.error("Error reading shipping config:", cfgErr);
     }
 
+    // Check user loyalty level and reward eligibility
+    let loyaltyDiscount = 0;
+    let rewardApplied = null;
+    try {
+      if (userId) {
+        const loyaltyStatus = await calculateUserLoyalty(userId);
+        if (loyaltyStatus?.activeReward?.isEligible) {
+          const act = loyaltyStatus.activeReward;
+
+          if (act.freeShipping) {
+            expectedFee = 0;
+          }
+
+          if (act.discountAmount > 0) {
+            loyaltyDiscount = Math.min(itemsTotal, Number(act.discountAmount));
+          }
+
+          rewardApplied = {
+            freeShipping: Boolean(act.freeShipping),
+            discountAmount: loyaltyDiscount,
+            giftAmount: act.giftAmount || 0,
+            giftDescription: act.giftDescription || "",
+            letterIncluded: Boolean(act.letterIncluded),
+            customPerk: act.customPerk || "",
+            levelName: loyaltyStatus.currentLevel.name,
+            levelIcon: loyaltyStatus.currentLevel.badgeIcon,
+            title: act.title || "VIP Reward",
+            usage: `Use ${act.currentUseIndex} of ${act.orderLimit}`,
+          };
+        }
+      }
+    } catch (loyErr) {
+      console.error("Error applying loyalty reward:", loyErr);
+    }
+
     const resolvedFee = req.body.deliveryFee !== undefined
       ? Math.max(0, Number(req.body.deliveryFee))
       : expectedFee;
-    const finalAmount = itemsTotal + resolvedFee;
+
+    const finalAmount = Math.max(0, itemsTotal + resolvedFee - loyaltyDiscount);
 
     const orderData = {
       userId,
@@ -118,6 +155,8 @@ const placeOrder = async (req, res) => {
       payment: false,
       date: BigInt(Date.now()),
       address,
+      loyaltyDiscount,
+      rewardApplied: rewardApplied ? JSON.stringify(rewardApplied) : "{}",
     };
 
     await prisma.order.create({ data: orderData });

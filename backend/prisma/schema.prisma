@@ -38,15 +38,17 @@ model Product {
 }
 
 model Order {
-  id            String  @id @default(uuid())
-  userId        String
-  items         Json
-  amount        Float
-  address       Json
-  status        String  @default("Order Placed")
-  paymentMethod String
-  payment       Boolean @default(false)
-  date          BigInt
+  id              String  @id @default(uuid())
+  userId          String
+  items           Json
+  amount          Float
+  address         Json
+  status          String  @default("Order Placed")
+  paymentMethod   String
+  payment         Boolean @default(false)
+  date            BigInt
+  loyaltyDiscount Float?  @default(0)
+  rewardApplied   Json?
 }
 
 model Category {
@@ -86,5 +88,39 @@ model ShippingConfig {
   differentCityFee Float    @default(120)
   freeShippingMin  Float?   @default(0)
   updatedAt        DateTime @updatedAt
+}
+
+model CustomerLevel {
+  id                String   @id @default(uuid())
+  levelNumber       Int      @unique
+  name              String
+  badgeIcon         String   @default("🥉")
+  color             String   @default("#CD7F32")
+  minSpend          Float    @default(0)
+  minOrders         Int      @default(0)
+  rewardType        String   @default("CUSTOM")
+  rewardValue       Float?   @default(0)
+  rewardTitle       String   @default("Welcome Reward")
+  rewardDescription String?  @db.Text
+  rewardOrderLimit  Int      @default(3)
+  freeShipping      Boolean  @default(false)
+  discountAmount    Float    @default(0)
+  giftAmount        Float    @default(0)
+  giftDescription   String?  @default("")
+  letterIncluded    Boolean  @default(false)
+  customPerk        String?  @default("")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model CustomerLetterImage {
+  id        String   @id @default(uuid())
+  userId    String
+  userEmail String?
+  imageUrl  String
+  title     String?  @default("Letter / Handwritten Note")
+  notes     String?  @db.Text
+  orderId   String?
+  createdAt DateTime @default(now())
 }
 
