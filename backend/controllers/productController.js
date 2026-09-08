@@ -12,6 +12,23 @@ const toImageArray = (val) => {
   return [];
 };
 
+// Helper: normalize category input into a clean string array
+const normalizeCategories = (val) => {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map((s) => String(s).trim()).filter(Boolean);
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed.map((s) => String(s).trim()).filter(Boolean);
+      } catch {}
+    }
+    return trimmed.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+};
+
 // function for add product
 const addProduct = async (req, res) => {
   try {
@@ -49,12 +66,13 @@ const addProduct = async (req, res) => {
     );
 
     const qty = stockQuantity !== undefined ? parseInt(stockQuantity, 10) : 0;
+    const categoriesArray = normalizeCategories(category);
 
     const productData = {
       name,
       description,
       price: Number(price),
-      category,
+      category: JSON.stringify(categoriesArray),
       subCategory,
       sizes: typeof sizes === "string" ? JSON.parse(sizes) : sizes,
       image: imagesUrl,
@@ -132,11 +150,14 @@ const updateProduct = async (req, res) => {
       newQty = parseInt(stockQuantity, 10);
     }
 
+    const categoryStorage =
+      category !== undefined ? JSON.stringify(normalizeCategories(category)) : undefined;
+
     const updateData = {
       ...(name && { name }),
       ...(description && { description }),
       ...(price !== undefined && { price: Number(price) }),
-      ...(category && { category }),
+      ...(categoryStorage !== undefined && { category: categoryStorage }),
       ...(subCategory && { subCategory }),
       ...(sizes && { sizes: typeof sizes === "string" ? JSON.parse(sizes) : sizes }),
       image: imagesUrl,
@@ -191,12 +212,17 @@ const listProducts = async (req, res) => {
     const whereCondition = isAdmin ? {} : { published: true };
 
     const rawProducts = await prisma.product.findMany({ where: whereCondition });
-    const products = rawProducts.map((item) => ({
-      ...item,
-      _id: item.id,
-      date: Number(item.date),
-      image: toImageArray(item.image),
-    }));
+    const products = rawProducts.map((item) => {
+      const cats = normalizeCategories(item.category);
+      return {
+        ...item,
+        _id: item.id,
+        date: Number(item.date),
+        image: toImageArray(item.image),
+        categories: cats,
+        category: cats.join(", "),
+      };
+    });
     res.json({ success: true, products });
   } catch (error) {
     console.log(error);
@@ -228,11 +254,14 @@ const singleProduct = async (req, res) => {
     if (!rawProduct) {
       return res.json({ success: false, message: "Product not found" });
     }
+    const cats = normalizeCategories(rawProduct.category);
     const product = {
       ...rawProduct,
       _id: rawProduct.id,
       date: Number(rawProduct.date),
       image: toImageArray(rawProduct.image),
+      categories: cats,
+      category: cats.join(", "),
     };
     res.json({ success: true, product });
   } catch (error) {

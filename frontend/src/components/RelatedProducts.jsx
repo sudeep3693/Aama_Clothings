@@ -6,21 +6,60 @@ import Title from "./Title";
 import Product from "../pages/Product";
 import ProductItem from "./ProductItem";
 
-const RelatedProducts = ({ category, subCategory }) => {
+const RelatedProducts = ({ category, categories, subCategory, currentId }) => {
   const { products } = useContext(ShopContext);
   const [related, setRelated] = useState([]);
+
   useEffect(() => {
     if (products.length > 0) {
-      let productsCopy = products.slice();
+      // Gather target category list (case-insensitive)
+      let targetCats = [];
+      if (Array.isArray(categories) && categories.length > 0) {
+        targetCats = categories.map((c) => String(c).trim().toLowerCase());
+      } else if (typeof category === "string" && category) {
+        targetCats = category.split(",").map((c) => c.trim().toLowerCase());
+      }
 
-      productsCopy = productsCopy.filter((item) => category === item.category);
-      productsCopy = productsCopy.filter(
-        (item) => subCategory === item.subCategory
+      // Filter out current product if provided
+      let productsCopy = products.filter(
+        (item) => !currentId || (item._id !== currentId && item.id !== currentId)
       );
+
+      // Match products that share any category
+      if (targetCats.length > 0) {
+        productsCopy = productsCopy.filter((item) => {
+          let itemCats = [];
+          if (Array.isArray(item.categories) && item.categories.length > 0) {
+            itemCats = item.categories.map((c) => String(c).trim().toLowerCase());
+          } else if (typeof item.category === "string" && item.category) {
+            const trimmed = item.category.trim();
+            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+              try {
+                itemCats = JSON.parse(trimmed).map((c) => String(c).trim().toLowerCase());
+              } catch {
+                itemCats = [trimmed.toLowerCase()];
+              }
+            } else {
+              itemCats = trimmed.split(",").map((c) => c.trim().toLowerCase());
+            }
+          }
+          return itemCats.some((c) => targetCats.includes(c));
+        });
+      }
+
+      // Filter by subcategory if matching ones exist
+      if (subCategory) {
+        const subFiltered = productsCopy.filter(
+          (item) => item.subCategory?.toLowerCase() === subCategory.toLowerCase()
+        );
+        if (subFiltered.length > 0) {
+          productsCopy = subFiltered;
+        }
+      }
 
       setRelated(productsCopy.slice(0, 5));
     }
-  }, [products, category, subCategory]);
+  }, [products, category, categories, subCategory, currentId]);
   return (
     <div className="my-24">
       <div className="text-center text-3xl py-2">

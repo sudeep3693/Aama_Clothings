@@ -60,6 +60,7 @@ const CreateOrder = ({ token }) => {
   const [allProducts, setAllProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [shippingConfig, setShippingConfig] = useState(null);
+  const [catalogCategoriesList, setCatalogCategoriesList] = useState(["Men", "Women", "Kids"]);
 
   // Product Selection Modal state
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
@@ -78,11 +79,30 @@ const CreateOrder = ({ token }) => {
   const [createdOrderForPrint, setCreatedOrderForPrint] = useState(null);
   const [isPrintingModalActive, setIsPrintingModalActive] = useState(false);
 
-  // Load Shipping Config & Products
+  // Load Shipping Config, Products & Categories
   useEffect(() => {
     fetchShippingConfig();
+    fetchCategories();
     fetchProducts();
   }, [token]);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await axios.get(`${backendUrl}/api/category/list`);
+      if (res.data.success && Array.isArray(res.data.categories)) {
+        const names = res.data.categories
+          .map((c) => (typeof c === "string" ? c : c.name))
+          .filter(Boolean);
+        if (names.length > 0) {
+          setCatalogCategoriesList((prev) =>
+            Array.from(new Set([...prev, ...names]))
+          );
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load categories for order creation:", e);
+    }
+  };
 
   const fetchShippingConfig = async () => {
     try {
@@ -102,7 +122,23 @@ const CreateOrder = ({ token }) => {
         headers: { token },
       });
       if (res.data.success) {
-        setAllProducts(res.data.products || []);
+        const prods = res.data.products || [];
+        setAllProducts(prods);
+
+        // Dynamically include any categories that products are tagged with
+        const prodCats = [];
+        prods.forEach((p) => {
+          if (Array.isArray(p.categories)) {
+            prodCats.push(...p.categories);
+          } else if (typeof p.category === "string" && p.category) {
+            prodCats.push(...p.category.split(",").map((c) => c.trim()));
+          }
+        });
+        if (prodCats.length > 0) {
+          setCatalogCategoriesList((prev) =>
+            Array.from(new Set([...prev, ...prodCats.filter(Boolean)]))
+          );
+        }
       } else {
         toast.error(res.data.message);
       }
@@ -172,14 +208,17 @@ const CreateOrder = ({ token }) => {
   const filteredCatalogProducts = useMemo(() => {
     return allProducts.filter((p) => {
       if (!p.published) return false;
+      const pCats = Array.isArray(p.categories) && p.categories.length > 0
+        ? p.categories
+        : (p.category ? [p.category] : []);
       const matchesCategory =
         catalogCategory === "All" ||
-        p.category?.toLowerCase() === catalogCategory.toLowerCase();
+        pCats.some((c) => c.toLowerCase() === catalogCategory.toLowerCase());
       const query = catalogSearch.trim().toLowerCase();
       const matchesSearch =
         !query ||
         p.name?.toLowerCase().includes(query) ||
-        p.category?.toLowerCase().includes(query) ||
+        pCats.some((c) => c.toLowerCase().includes(query)) ||
         p.subCategory?.toLowerCase().includes(query);
       return matchesCategory && matchesSearch;
     });
@@ -193,13 +232,17 @@ const CreateOrder = ({ token }) => {
     }
     const q = quickSearchQuery.toLowerCase();
     const matches = allProducts
-      .filter(
-        (p) =>
-          p.published &&
-          (p.name?.toLowerCase().includes(q) ||
-            p.category?.toLowerCase().includes(q) ||
-            p.subCategory?.toLowerCase().includes(q))
-      )
+      .filter((p) => {
+        if (!p.published) return false;
+        const pCats = Array.isArray(p.categories) && p.categories.length > 0
+          ? p.categories
+          : (p.category ? [p.category] : []);
+        return (
+          p.name?.toLowerCase().includes(q) ||
+          pCats.some((c) => c.toLowerCase().includes(q)) ||
+          p.subCategory?.toLowerCase().includes(q)
+        );
+      })
       .slice(0, 6);
     setQuickSearchResults(matches);
   }, [quickSearchQuery, allProducts]);
@@ -380,7 +423,10 @@ const CreateOrder = ({ token }) => {
         _id: pId,
         name: product.name,
         image: Array.isArray(product.image) ? product.image : [product.image].filter(Boolean),
-        category: product.category || "",
+        category: Array.isArray(product.categories) && product.categories.length > 0
+          ? product.categories.join(", ")
+          : (product.category || ""),
+        categories: Array.isArray(product.categories) ? product.categories : (product.category ? [product.category] : []),
         subCategory: product.subCategory || "",
         size,
         color,
@@ -1274,7 +1320,7 @@ const CreateOrder = ({ token }) => {
 
               {/* Category Filter Chips */}
               <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-                {["All", "Men", "Women", "Kids"].map((cat) => (
+                {["All", ...catalogCategoriesList].map((cat) => (
                   <button
                     key={cat}
                     type="button"
@@ -1362,7 +1408,9 @@ const CreateOrder = ({ token }) => {
                           </div>
 
                           <p className="text-[10px] text-gray-400 mb-2">
-                            {product.category} &bull; {product.subCategory}
+                            {(Array.isArray(product.categories) && product.categories.length > 0
+                              ? product.categories.join(", ")
+                              : product.category || "")} &bull; {product.subCategory}
                           </p>
 
                           {/* Live Availability Badge for selected variant */}

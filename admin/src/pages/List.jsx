@@ -14,7 +14,7 @@ const List = ({ token }) => {
   const [editDescription, setEditDescription] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [editDiscount, setEditDiscount] = useState("");
-  const [editCategory, setEditCategory] = useState("");
+  const [editCategories, setEditCategories] = useState([]);
   const [editSubCategory, setEditSubCategory] = useState("");
   const [editBestseller, setEditBestseller] = useState(false);
   const [editPublished, setEditPublished] = useState(true);
@@ -24,6 +24,7 @@ const List = ({ token }) => {
   const [variantQty, setVariantQty] = useState("");
   const [editImage1, setEditImage1] = useState(null);
   const [colorsList, setColorsList] = useState([]);
+  const [categoriesList, setCategoriesList] = useState([]);
 
   const fetchList = async () => {
     try {
@@ -80,13 +81,33 @@ const List = ({ token }) => {
     }
   };
 
+  const parseCategories = (val) => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val.filter(Boolean);
+    if (typeof val === "string") {
+      const trimmed = val.trim();
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) return parsed.filter(Boolean);
+        } catch {}
+      }
+      return trimmed.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+  };
+
   const openEditModal = (product) => {
     setEditingProduct(product);
     setEditName(product.name || "");
     setEditDescription(product.description || "");
     setEditPrice(product.price || "");
     setEditDiscount(product.discount || 0);
-    setEditCategory(product.category || "");
+    const cats =
+      product.categories && product.categories.length > 0
+        ? product.categories
+        : parseCategories(product.category);
+    setEditCategories(cats.length > 0 ? cats : ["Men"]);
     setEditSubCategory(product.subCategory || "");
     setEditBestseller(product.bestseller || false);
     setEditPublished(product.published !== undefined ? product.published : true);
@@ -99,6 +120,10 @@ const List = ({ token }) => {
 
   const saveEditHandler = async (e) => {
     e.preventDefault();
+    if (editCategories.length === 0) {
+      toast.error("Please select at least 1 category");
+      return;
+    }
     try {
       const formData = new FormData();
       formData.append("id", editingProduct._id);
@@ -106,7 +131,7 @@ const List = ({ token }) => {
       formData.append("description", editDescription);
       formData.append("price", editPrice);
       formData.append("discount", editDiscount);
-      formData.append("category", editCategory);
+      formData.append("category", JSON.stringify(editCategories));
       formData.append("subCategory", editSubCategory);
       
       const computedStockQuantity = editVariants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0);
@@ -144,12 +169,18 @@ const List = ({ token }) => {
     }
   };
 
-  const fetchColors = async () => {
+  const fetchColorsAndCategories = async () => {
     try {
-      const response = await axios.get(backendUrl + "/api/color/list");
-      if (response.data.success && response.data.colors.length > 0) {
-        setColorsList(response.data.colors);
-        setVariantColor(response.data.colors[0].name);
+      const [colRes, catRes] = await Promise.all([
+        axios.get(backendUrl + "/api/color/list"),
+        axios.get(backendUrl + "/api/category/list"),
+      ]);
+      if (colRes.data.success && colRes.data.colors.length > 0) {
+        setColorsList(colRes.data.colors);
+        setVariantColor(colRes.data.colors[0].name);
+      }
+      if (catRes.data.success && catRes.data.categories.length > 0) {
+        setCategoriesList(catRes.data.categories);
       }
     } catch (error) {
       console.log(error);
@@ -158,7 +189,7 @@ const List = ({ token }) => {
 
   useEffect(() => {
     fetchList();
-    fetchColors();
+    fetchColorsAndCategories();
   }, []);
 
   return (
@@ -202,7 +233,19 @@ const List = ({ token }) => {
                 </span>
               )}
             </div>
-            <p className="text-gray-600">{item.category}</p>
+            <div className="flex flex-wrap gap-1">
+              {(item.categories && item.categories.length > 0
+                ? item.categories
+                : parseCategories(item.category)
+              ).map((cat, i) => (
+                <span
+                  key={i}
+                  className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200"
+                >
+                  {cat}
+                </span>
+              ))}
+            </div>
             <div>
               {item.discount > 0 ? (
                 <div>
@@ -316,6 +359,55 @@ const List = ({ token }) => {
                     max="100"
                   />
                 </div>
+              </div>
+
+              {/* Multi-category Selector */}
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="font-semibold text-xs text-gray-700">Categories (Select 1 or more)</label>
+                  <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full">
+                    {editCategories.length} selected
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {categoriesList.map((c) => {
+                    const isSelected = editCategories.includes(c.name);
+                    return (
+                      <button
+                        key={c.id || c.name}
+                        type="button"
+                        onClick={() => {
+                          setEditCategories((prev) =>
+                            prev.includes(c.name)
+                              ? prev.length === 1
+                                ? prev
+                                : prev.filter((x) => x !== c.name)
+                              : [...prev, c.name]
+                          );
+                        }}
+                        className={`px-2.5 py-1 rounded text-xs font-semibold border transition-all ${
+                          isSelected
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
+                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                        }`}
+                      >
+                        {isSelected ? "✓ " : "+ "}
+                        {c.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block mb-1 font-medium">Sub Category (Type)</label>
+                <input
+                  type="text"
+                  value={editSubCategory}
+                  onChange={(e) => setEditSubCategory(e.target.value)}
+                  className="w-full border px-3 py-2 rounded"
+                  required
+                />
               </div>
 
               <div>

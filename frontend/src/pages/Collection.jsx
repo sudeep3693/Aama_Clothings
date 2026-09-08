@@ -42,6 +42,33 @@ const Collection = () => {
     fetchDynamicFilters();
   }, [backendUrl]);
 
+  // Dynamically include any custom categories present on products (e.g. Festival Offer)
+  useEffect(() => {
+    if (products && products.length > 0) {
+      setCategoriesList((prev) => {
+        const prodCats = [];
+        products.forEach((p) => {
+          if (Array.isArray(p.categories)) {
+            prodCats.push(...p.categories);
+          } else if (typeof p.category === "string" && p.category) {
+            const trimmed = p.category.trim();
+            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+              try {
+                prodCats.push(...JSON.parse(trimmed));
+              } catch {
+                prodCats.push(trimmed);
+              }
+            } else {
+              prodCats.push(...trimmed.split(",").map((s) => s.trim()));
+            }
+          }
+        });
+        const combined = Array.from(new Set([...prev, ...prodCats.filter(Boolean)]));
+        return combined;
+      });
+    }
+  }, [products]);
+
   const toggleCategory = (e) => {
     if (category.includes(e.target.value)) {
       setCategory((prev) => prev.filter((item) => item !== e.target.value));
@@ -68,9 +95,24 @@ const Collection = () => {
     }
 
     if (category.length > 0) {
-      productsCopy = productsCopy.filter((item) =>
-        category.includes(item.category)
-      );
+      productsCopy = productsCopy.filter((item) => {
+        let itemCats = [];
+        if (Array.isArray(item.categories)) {
+          itemCats = item.categories;
+        } else if (typeof item.category === "string") {
+          const trimmed = item.category.trim();
+          if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            try {
+              itemCats = JSON.parse(trimmed);
+            } catch {
+              itemCats = [trimmed];
+            }
+          } else {
+            itemCats = trimmed.split(",").map((s) => s.trim()).filter(Boolean);
+          }
+        }
+        return itemCats.some((c) => category.includes(c));
+      });
     }
 
     if (subCategory.length > 0) {
