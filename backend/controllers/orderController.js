@@ -357,10 +357,299 @@ const cashReceived = async (req, res) => {
   }
 };
 
+// Admin Create Order for Social Media & Manual Phone Inquiries
+const adminCreateOrder = async (req, res) => {
+  try {
+    const {
+      client,
+      items,
+      discount = 0,
+      deliveryFee,
+      paymentMethod = "COD",
+      payment = false,
+      status = "Order Placed",
+    } = req.body;
+
+    if (!client || !client.firstName || !client.phone) {
+      return res.json({
+        success: false,
+        message: "Customer first name and contact phone number are required",
+      });
+    }
+
+    if (!items || items.length === 0) {
+      return res.json({
+        success: false,
+        message: "Please select at least one product for the order",
+      });
+    }
+
+    // Extract product IDs and query current DB records to freeze price snapshots
+    const productIds = items.map((i) => i._id || i.id || i.productId).filter(Boolean);
+    const dbProducts = await prisma.product.findMany({
+      where: { id: { in: productIds } },
+    });
+
+    // Validate stock before proceeding
+    for (const cartItem of items) {
+      const pId = cartItem._id || cartItem.id || cartItem.productId;
+      const matchedProduct = dbProducts.find((p) => p.id === pId);
+      if (!matchedProduct) {
+        return res.json({
+          success: false,
+          message: `Product not found: ${cartItem.name || pId}`,
+        });
+      }
+
+      const orderedQty = Number(cartItem.quantity || 1);
+      const parsedVariants =
+        typeof matchedProduct.variants === "string"
+          ? JSON.parse(matchedProduct.variants)
+          : matchedProduct.variants || [];
+
+      if (
+        cartItem.size &&
+        cartItem.color &&
+        Array.isArray(parsedVariants) &&
+        parsedVariants.length > 0
+      ) {
+        const variant = parsedVariants.find(
+          (v) => v.size === cartItem.size && v.color === cartItem.color
+        );
+        if (variant && variant.quantity !== undefined && variant.quantity !== null) {
+          if (orderedQty > variant.quantity) {
+            return res.json({
+              success: false,
+              message: `Requested quantity (${orderedQty}) for "${matchedProduct.name}" (${cartItem.size}/${cartItem.color}) exceeds available stock (${variant.quantity}).`,
+            });
+          }
+        }
+      }
+
+      if (matchedProduct.stockQuantity > 0 && orderedQty > matchedProduct.stockQuantity) {
+        return res.json({
+          success: false,
+          message: `Requested quantity for "${matchedProduct.name}" exceeds available stock (${matchedProduct.stockQuantity}).`,
+        });
+      }
+    }
+
+    // Freeze snapshot of items
+    const frozenItemsSnapshot = items.map((cartItem) => {
+      const pId = cartItem._id || cartItem.id || cartItem.productId;
+      const matchedProduct = dbProducts.find((p) => p.id === pId);
+
+      const originalUnitPrice = matchedProduct
+        ? matchedProduct.price
+        : Number(cartItem.originalUnitPrice || cartItem.price || 0);
+      const discountPercentage = matchedProduct
+        ? matchedProduct.discount || 0
+        : Number(cartItem.discountPercentage || 0);
+
+      const calculatedUnit =
+        discountPercentage > 0
+          ? Math.round(originalUnitPrice * (1 - discountPercentage / 100))
+          : originalUnitPrice;
+
+      const purchasedUnitPrice =
+        cartItem.purchasedUnitPrice !== undefined
+          ? Number(cartItem.purchasedUnitPrice)
+          : cartItem.price !== undefined
+          ? Number(cartItem.price)
+          : calculatedUnit;
+
+      const qty = Number(cartItem.quantity || 1);
+
+      return {
+        ...cartItem,
+        _id: pId,
+        productId: pId,
+        name: matchedProduct ? matchedProduct.name : cartItem.name || "Product",
+        image: matchedProduct ? matchedProduct.image : cartItem.image || [],
+        category: matchedProduct ? matchedProduct.category : cartItem.category || "",
+        subCategory: matchedProduct ? matchedProduct.subCategory : cartItem.subCategory || "",
+        size: cartItem.size || "",
+        color: cartItem.color || "",
+        quantity: qty,
+        originalUnitPrice: originalUnitPrice,
+        discountPercentage: discountPercentage,
+        purchasedUnitPrice: purchasedUnitPrice,
+        price: purchasedUnitPrice,
+        lineTotal: purchasedUnitPrice * qty,
+      };
+    });
+
+    const itemsTotal = frozenItemsSnapshot.reduce((acc, item) => acc + item.lineTotal, 0);
+
+    // Dynamic shipping calculation according to shipment rates (ShippingConfig)
+    let expectedFee = 50;
+    try {
+      const shippingCfg = await prisma.shippingConfig.findFirst();
+      if (shippingCfg) {
+        const destCity = (client.city || "").trim().toLowerCase();
+        const baseCity = (shippingCfg.baseCity || "Kathmandu").trim().toLowerCase();
+        const isFree =
+          Number(shippingCfg.freeShippingMin || 0) > 0 &&
+          itemsTotal >= Number(shippingCfg.freeShippingMin);
+
+        if (isFree) {
+          expectedFee = 0;
+        } else if (destCity && destCity === baseCity) {
+          expectedFee = Number(shippingCfg.sameCityFee || 50);
+        } else {
+          expectedFee = Number(shippingCfg.differentCityFee || 120);
+        }
+      }
+    } catch (cfgErr) {
+      console.error("Error reading shipping config:", cfgErr);
+    }
+
+    const resolvedFee =
+      deliveryFee !== undefined && deliveryFee !== null && deliveryFee !== ""
+        ? Math.max(0, Number(deliveryFee))
+        : expectedFee;
+
+    const manualDiscount = Math.max(0, Number(discount) || 0);
+    const finalAmount = Math.max(0, itemsTotal + resolvedFee - manualDiscount);
+
+    // Associate userId: check if a user with client's email exists
+    let orderUserId = "admin_social_client";
+    if (client.email && client.email.trim()) {
+      try {
+        const existingUser = await prisma.user.findUnique({
+          where: { email: client.email.trim() },
+        });
+        if (existingUser) {
+          orderUserId = existingUser.id;
+        }
+      } catch (e) {
+        console.error("Error checking user for admin order:", e);
+      }
+    }
+
+    const addressSnapshot = {
+      firstName: client.firstName.trim(),
+      lastName: (client.lastName || "").trim(),
+      email: (client.email || "").trim(),
+      phone: client.phone.trim(),
+      street: client.street || "",
+      landmark: client.landmark || "",
+      city: client.city || "Kathmandu",
+      state: client.state || "Bagmati Province",
+      zipcode: client.zipcode || "44600",
+      country: client.country || "Nepal",
+      source: client.source || "Social Media",
+      socialUsername: client.socialUsername || "",
+      orderNotes: client.orderNotes || "",
+    };
+
+    const newOrder = await prisma.order.create({
+      data: {
+        userId: orderUserId,
+        items: frozenItemsSnapshot,
+        amount: finalAmount,
+        paymentMethod: paymentMethod || "COD",
+        payment: Boolean(payment),
+        status: status || "Order Placed",
+        date: BigInt(Date.now()),
+        address: addressSnapshot,
+        loyaltyDiscount: manualDiscount,
+        rewardApplied: JSON.stringify({
+          source: client.source || "Social Media",
+          manualDiscount,
+          deliveryFee: resolvedFee,
+          adminCreated: true,
+        }),
+      },
+    });
+
+    // Deduct stock
+    const productDeductions = {};
+    for (const cartItem of frozenItemsSnapshot) {
+      const pId = cartItem.productId || cartItem._id;
+      const orderedQty = Number(cartItem.quantity || 1);
+      if (!pId) continue;
+
+      if (!productDeductions[pId]) {
+        productDeductions[pId] = {
+          totalQty: 0,
+          variantDeductions: [],
+        };
+      }
+      productDeductions[pId].totalQty += orderedQty;
+
+      if (cartItem.size && cartItem.color) {
+        productDeductions[pId].variantDeductions.push({
+          size: cartItem.size,
+          color: cartItem.color,
+          quantity: orderedQty,
+        });
+      }
+    }
+
+    for (const [pId, deduction] of Object.entries(productDeductions)) {
+      const currentProd = await prisma.product.findUnique({ where: { id: pId } });
+      if (!currentProd) continue;
+
+      let updateData = {};
+      let parsedVariants =
+        typeof currentProd.variants === "string"
+          ? JSON.parse(currentProd.variants || "[]")
+          : currentProd.variants || [];
+
+      const hasVariants = Array.isArray(parsedVariants) && parsedVariants.length > 0;
+
+      if (hasVariants && deduction.variantDeductions.length > 0) {
+        for (const vd of deduction.variantDeductions) {
+          const vIdx = parsedVariants.findIndex(
+            (v) => v.size === vd.size && v.color === vd.color
+          );
+          if (vIdx !== -1) {
+            const currentVariantQty = Number(parsedVariants[vIdx].quantity || 0);
+            parsedVariants[vIdx].quantity = Math.max(0, currentVariantQty - vd.quantity);
+          }
+        }
+        updateData.variants = parsedVariants;
+        const totalVariantStock = parsedVariants.reduce(
+          (acc, v) => acc + (Number(v.quantity) || 0),
+          0
+        );
+        updateData.stockQuantity = totalVariantStock;
+      } else if (
+        currentProd.stockQuantity !== undefined &&
+        currentProd.stockQuantity !== null
+      ) {
+        const newStock = Math.max(0, Number(currentProd.stockQuantity) - deduction.totalQty);
+        updateData.stockQuantity = newStock;
+      }
+
+      await prisma.product.update({
+        where: { id: pId },
+        data: updateData,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Order created successfully",
+      orderId: newOrder.id,
+      order: {
+        ...newOrder,
+        _id: newOrder.id,
+        date: Number(newOrder.date),
+      },
+    });
+  } catch (error) {
+    console.error("Admin create order error:", error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
 export {
   placeOrder,
   allOrders,
   userOrders,
   updateStatus,
   cashReceived,
+  adminCreateOrder,
 };

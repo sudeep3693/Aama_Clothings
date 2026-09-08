@@ -7,6 +7,7 @@ import { backendUrl, currency } from "../App";
 import { toast } from "react-toastify";
 import { assets } from "../assets/assets";
 import ShippingLabelModal from "../components/ShippingLabelModal";
+import { Link } from "react-router-dom";
 
 const ORDER_STATUSES = [
   "All",
@@ -226,6 +227,18 @@ const Orders = ({ token }) => {
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          {/* CREATE SOCIAL MEDIA / MANUAL ORDER BUTTON */}
+          <Link
+            to="/create-order"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs active:scale-95 transition-all"
+            title="Create a new manual order for social media or phone inquiry"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+            </svg>
+            <span>+ Create Order</span>
+          </Link>
+
           {/* PRIMARY BATCH PRINT BUTTON FOR ALL NEW ORDERS */}
           <button
             type="button"
@@ -488,6 +501,16 @@ const Orders = ({ token }) => {
                     </span>
                     <span className="text-gray-400">•</span>
                     <span className="text-gray-500">{orderDateStr}</span>
+
+                    {order.address?.source && (
+                      <span className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-md text-[10px] font-bold flex items-center gap-1">
+                        <span>📱</span>
+                        <span>{order.address.source}</span>
+                        {order.address.socialUsername && (
+                          <span className="text-purple-500 font-normal">(@{order.address.socialUsername})</span>
+                        )}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -658,6 +681,15 @@ const Orders = ({ token }) => {
                       {order.address?.email && (
                         <p className="text-gray-500 text-[11px]">
                           ✉️ {order.address.email}
+                        </p>
+                      )}
+                      {order.address?.source && (
+                        <p className="text-[11px] text-purple-700 font-semibold flex items-center gap-1">
+                          <span>Channel:</span>
+                          <strong>{order.address.source}</strong>
+                          {order.address.socialUsername && (
+                            <span className="text-purple-500">(@{order.address.socialUsername})</span>
+                          )}
                         </p>
                       )}
                       <p className="text-gray-700 pt-1">

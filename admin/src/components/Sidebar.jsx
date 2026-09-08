@@ -29,6 +29,18 @@ const Sidebar = () => {
           <p className="hidden md:block">Orders</p>
         </NavLink>
         <NavLink
+          className="flex items-center gap-3 border border-indigo-200 bg-indigo-50/40 border-r-0 px-3 py-2 rounded-l group hover:bg-indigo-50"
+          to="/create-order"
+        >
+          <svg className="w-5 h-5 text-indigo-600 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="hidden md:block text-left">
+            <p className="font-bold text-indigo-950 text-[14px]">Create Order</p>
+            <p className="text-[10px] text-indigo-500 -mt-0.5">Social & Direct</p>
+          </div>
+        </NavLink>
+        <NavLink
           className="flex items-center gap-3 border border-gray-300 border-r-0 px-3 py-2 rounded-l"
           to="/customers"
         >
