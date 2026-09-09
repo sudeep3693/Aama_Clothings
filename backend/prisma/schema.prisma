@@ -36,9 +36,11 @@ model Product {
   offerTag        String?   @default("")
   offerEndDate    DateTime?
   discount        Float     @default(0)
-  stockQuantity   Int     @default(0)
-  published       Boolean @default(true)
-  date            BigInt
+  costPrice       Float     @default(0)
+  stockQuantity     Int     @default(0)
+  lowStockThreshold Int     @default(5)
+  published         Boolean @default(true)
+  date              BigInt
 }
 
 model Order {
@@ -143,3 +145,46 @@ model SpecialOffer {
   updatedAt   DateTime @updatedAt
 }
 
+model StockLog {
+  id           String   @id @default(uuid())
+  productId    String
+  productName  String
+  variantLabel String?  @default("")
+  previousQty  Int
+  newQty       Int
+  changeQty    Int
+  reason       String
+  note         String?  @db.Text
+  orderId      String?
+  source       String?  @default("admin")
+  createdAt    DateTime @default(now())
+}
+
+model InboundShipment {
+  id               String   @id @default(uuid())
+  batchNumber      String   @unique
+  carrier          String   @default("Local Freight")
+  shipmentDate     DateTime
+  totalFreightCost Float    @default(0)
+  customsOrTaxes   Float    @default(0)
+  notes            String?  @db.Text
+  items            Json     @default("[]")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model MonthlyExpense {
+  id                    String   @id @default(uuid())
+  yearMonth             String   @unique
+  marketingSpend        Float    @default(0)
+  officeRent            Float    @default(0)
+  utilities             Float    @default(0)
+  salaries              Float    @default(0)
+  softwareTools         Float    @default(0)
+  packagingCostPerUnit  Float    @default(20)
+  miscExpenses          Float    @default(0)
+  projectedMonthlyUnits Int      @default(300)
+  notes                 String?  @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}

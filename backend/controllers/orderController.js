@@ -273,6 +273,28 @@ const placeOrder = async (req, res) => {
         where: { id: pId },
         data: updateData,
       });
+
+      // Record StockLog entry
+      try {
+        const finalQty = updateData.stockQuantity !== undefined ? updateData.stockQuantity : (currentProd.stockQuantity || 0);
+        await prisma.stockLog.create({
+          data: {
+            productId: pId,
+            productName: currentProd.name,
+            variantLabel: deduction.variantDeductions.length > 0
+              ? deduction.variantDeductions.map((v) => `${v.size}/${v.color}`).join(", ")
+              : null,
+            previousQty: currentProd.stockQuantity || 0,
+            newQty: finalQty,
+            changeQty: -deduction.totalQty,
+            reason: "order_sale",
+            note: "Website Customer Order",
+            source: "website",
+          },
+        });
+      } catch (logErr) {
+        console.error("StockLog creation failed in placeOrder:", logErr);
+      }
     }
 
     res.json({ success: true, message: "Order Placed Successfully" });
@@ -627,6 +649,29 @@ const adminCreateOrder = async (req, res) => {
         where: { id: pId },
         data: updateData,
       });
+
+      // Record StockLog entry
+      try {
+        const channelSource = (client.source || "admin").toLowerCase().replace(/\s+/g, "_");
+        const finalQty = updateData.stockQuantity !== undefined ? updateData.stockQuantity : (currentProd.stockQuantity || 0);
+        await prisma.stockLog.create({
+          data: {
+            productId: pId,
+            productName: currentProd.name,
+            variantLabel: deduction.variantDeductions.length > 0
+              ? deduction.variantDeductions.map((v) => `${v.size}/${v.color}`).join(", ")
+              : null,
+            previousQty: currentProd.stockQuantity || 0,
+            newQty: finalQty,
+            changeQty: -deduction.totalQty,
+            reason: "order_sale",
+            note: `Manual Order (${client.source || "Social Media"})`,
+            source: channelSource || "admin",
+          },
+        });
+      } catch (logErr) {
+        console.error("StockLog creation failed in adminCreateOrder:", logErr);
+      }
     }
 
     res.json({

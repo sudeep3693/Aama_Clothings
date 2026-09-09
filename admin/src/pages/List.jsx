@@ -13,12 +13,14 @@ const List = ({ token }) => {
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editPrice, setEditPrice] = useState("");
+  const [editCostPrice, setEditCostPrice] = useState("");
   const [editDiscount, setEditDiscount] = useState("");
   const [editCategories, setEditCategories] = useState([]);
   const [editSubCategory, setEditSubCategory] = useState("");
   const [editBestseller, setEditBestseller] = useState(false);
   const [editNewInStore, setEditNewInStore] = useState(false);
   const [editPublished, setEditPublished] = useState(true);
+  const [editLowStockThreshold, setEditLowStockThreshold] = useState(5);
   const [editVariants, setEditVariants] = useState([]);
   const [variantSize, setVariantSize] = useState("S");
   const [variantColor, setVariantColor] = useState("");
@@ -103,6 +105,7 @@ const List = ({ token }) => {
     setEditName(product.name || "");
     setEditDescription(product.description || "");
     setEditPrice(product.price || "");
+    setEditCostPrice(product.costPrice !== undefined ? product.costPrice : 0);
     setEditDiscount(product.discount || 0);
     const cats =
       product.categories && product.categories.length > 0
@@ -113,6 +116,7 @@ const List = ({ token }) => {
     setEditBestseller(product.bestseller || false);
     setEditNewInStore(product.newInStore || false);
     setEditPublished(product.published !== undefined ? product.published : true);
+    setEditLowStockThreshold(product.lowStockThreshold !== undefined ? product.lowStockThreshold : 5);
     setEditVariants(product.variants || []);
     setVariantSize("S");
     setVariantColor("");
@@ -132,12 +136,14 @@ const List = ({ token }) => {
       formData.append("name", editName);
       formData.append("description", editDescription);
       formData.append("price", editPrice);
+      formData.append("costPrice", editCostPrice || 0);
       formData.append("discount", editDiscount);
       formData.append("category", JSON.stringify(editCategories));
       formData.append("subCategory", editSubCategory);
       
       const computedStockQuantity = editVariants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0);
       formData.append("stockQuantity", computedStockQuantity);
+      formData.append("lowStockThreshold", editLowStockThreshold);
       
       formData.append("bestseller", editBestseller);
       formData.append("newInStore", editNewInStore);
@@ -275,12 +281,16 @@ const List = ({ token }) => {
                 <span className="bg-red-100 text-red-700 text-xs font-semibold px-2 py-1 rounded">
                   Out of Stock
                 </span>
+              ) : item.stockQuantity <= (item.lowStockThreshold || 5) ? (
+                <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-1 rounded border border-amber-300">
+                  ⚠️ Low Stock ({item.stockQuantity})
+                </span>
               ) : (
                 <span className="bg-green-100 text-green-700 text-xs font-semibold px-2 py-1 rounded">
                   In Stock
                 </span>
               )}
-              {item.stockQuantity > 0 && (
+              {item.stockQuantity > (item.lowStockThreshold || 5) && (
                 <p className="text-[10px] text-gray-500 mt-0.5">
                   {item.stockQuantity} left
                 </p>
@@ -347,26 +357,48 @@ const List = ({ token }) => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div>
-                  <label className="block mb-1 font-medium">Price ({currency})</label>
+                  <label className="block mb-1 font-medium text-xs">Selling Price ({currency})</label>
                   <input
                     type="number"
                     value={editPrice}
                     onChange={(e) => setEditPrice(e.target.value)}
-                    className="w-full border px-3 py-2 rounded"
+                    className="w-full border px-2.5 py-1.5 rounded text-sm"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block mb-1 font-medium">Discount (%)</label>
+                  <label className="block mb-1 font-medium text-xs text-emerald-900">Cost Price ({currency})</label>
+                  <input
+                    type="number"
+                    value={editCostPrice}
+                    onChange={(e) => setEditCostPrice(e.target.value)}
+                    className="w-full border border-emerald-300 bg-emerald-50/30 px-2.5 py-1.5 rounded text-sm"
+                    min="0"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 font-medium text-xs">Discount (%)</label>
                   <input
                     type="number"
                     value={editDiscount}
                     onChange={(e) => setEditDiscount(e.target.value)}
-                    className="w-full border px-3 py-2 rounded"
+                    className="w-full border px-2.5 py-1.5 rounded text-sm"
                     min="0"
                     max="100"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 font-medium text-xs text-amber-900">Low Stock Alert</label>
+                  <input
+                    type="number"
+                    value={editLowStockThreshold}
+                    onChange={(e) => setEditLowStockThreshold(e.target.value)}
+                    className="w-full border border-amber-300 bg-amber-50/30 px-2.5 py-1.5 rounded text-sm"
+                    min="1"
+                    placeholder="5"
                   />
                 </div>
               </div>

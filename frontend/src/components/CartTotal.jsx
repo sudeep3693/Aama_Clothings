@@ -113,6 +113,11 @@ const CartTotal = ({
           <b>Total</b>
           <b className="text-gray-900">{currency} {grandTotal}.00</b>
         </div>
+        {subtotal > 0 && (
+          <p className="text-[11px] text-gray-500 text-right -mt-1">
+            Inclusive of 13% VAT ({currency}{((subtotal / 1.13) * 0.13).toFixed(2)})
+          </p>
+        )}
 
       </div>
     </div>

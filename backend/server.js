@@ -15,6 +15,7 @@ import shippingRouter from "./routes/shippingRoute.js";
 import loyaltyRouter from "./routes/loyaltyRoute.js";
 import customerRouter from "./routes/customerRoute.js";
 import offerRouter from "./routes/offerRoute.js";
+import cogsRouter from "./routes/cogsRoute.js";
 
 // App Config
 const app = express();
@@ -47,6 +48,7 @@ app.use("/api/shipping", shippingRouter);
 app.use("/api/loyalty", loyaltyRouter);
 app.use("/api/customer", customerRouter);
 app.use("/api/offer", offerRouter);
+app.use("/api/cogs", cogsRouter);
 
 app.get("/", (req, res) => {
   res.send("API Working");

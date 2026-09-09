@@ -12,6 +12,8 @@ import Customers from "./pages/Customers";
 import LoyaltyLevels from "./pages/LoyaltyLevels";
 import CreateOrder from "./pages/CreateOrder";
 import SpecialOffers from "./pages/SpecialOffers";
+import Inventory from "./pages/Inventory";
+import CogsCalculator from "./pages/CogsCalculator";
 import Login from "./components/Login";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -40,24 +42,27 @@ const App = () => {
       ) : (
         <>
           <Navbar setToken={setToken} />
-          <hr />
-          <div className="flex w-full">
+          <div className="flex w-full min-h-[calc(100vh-65px)]">
             <Sidebar />
-            <div className="w-[70%] mx-auto ml-[max(5vw, 25px)] my-8 text-gray-600 text-base">
-              <Routes>
-                <Route path="/add" element={<Add token={token} />} />
-                <Route path="/list" element={<List token={token} />} />
-                <Route path="/special-offers" element={<SpecialOffers token={token} />} />
-                <Route path="/create-order" element={<CreateOrder token={token} />} />
-                <Route path="/add-order" element={<CreateOrder token={token} />} />
-                <Route path="/orders" element={<Orders token={token} />} />
-                <Route path="/customers" element={<Customers token={token} />} />
-                <Route path="/loyalty-levels" element={<LoyaltyLevels token={token} />} />
-                <Route path="/categories" element={<Categories token={token} />} />
-                <Route path="/reviews" element={<Reviews token={token} />} />
-                <Route path="/shipping" element={<ShippingSettings token={token} />} />
-              </Routes>
-            </div>
+            <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-slate-50/60 overflow-x-hidden min-w-0">
+              <div className="max-w-7xl mx-auto">
+                <Routes>
+                  <Route path="/add" element={<Add token={token} />} />
+                  <Route path="/list" element={<List token={token} />} />
+                  <Route path="/inventory" element={<Inventory token={token} />} />
+                  <Route path="/cogs" element={<CogsCalculator token={token} />} />
+                  <Route path="/special-offers" element={<SpecialOffers token={token} />} />
+                  <Route path="/create-order" element={<CreateOrder token={token} />} />
+                  <Route path="/add-order" element={<CreateOrder token={token} />} />
+                  <Route path="/orders" element={<Orders token={token} />} />
+                  <Route path="/customers" element={<Customers token={token} />} />
+                  <Route path="/loyalty-levels" element={<LoyaltyLevels token={token} />} />
+                  <Route path="/categories" element={<Categories token={token} />} />
+                  <Route path="/reviews" element={<Reviews token={token} />} />
+                  <Route path="/shipping" element={<ShippingSettings token={token} />} />
+                </Routes>
+              </div>
+            </main>
           </div>
         </>
       )}

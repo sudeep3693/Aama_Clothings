@@ -15,7 +15,9 @@ const Add = ({ token }) => {
   const [name, setName] = useState("");
   const [description, setDesription] = useState("");
   const [price, setPrice] = useState("");
+  const [costPrice, setCostPrice] = useState("");
   const [discount, setDiscount] = useState("");
+  const [lowStockThreshold, setLowStockThreshold] = useState("5");
   const [selectedCategories, setSelectedCategories] = useState(["Men"]);
   const [subCategory, setSubCategory] = useState("Topwear");
   const [bestseller, setBestSeller] = useState(false);
@@ -133,6 +135,7 @@ const Add = ({ token }) => {
       formData.append("name", name);
       formData.append("description", description);
       formData.append("price", price);
+      formData.append("costPrice", costPrice || 0);
       formData.append("discount", discount);
       formData.append("category", JSON.stringify(selectedCategories));
       formData.append("subCategory", finalSubCategory);
@@ -141,6 +144,7 @@ const Add = ({ token }) => {
       
       const computedStockQuantity = variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0);
       formData.append("stockQuantity", computedStockQuantity);
+      formData.append("lowStockThreshold", lowStockThreshold || 5);
       
       const allSizes = [...new Set(variants.map(v => v.size))];
       const allColors = [...new Set(variants.map(v => v.color))];
@@ -169,7 +173,9 @@ const Add = ({ token }) => {
         setImage3(false);
         setImage4(false);
         setPrice("");
+        setCostPrice("");
         setDiscount("");
+        setLowStockThreshold("5");
         setBestSeller(false);
         setNewInStore(false);
         setVariants([]);
@@ -373,28 +379,52 @@ const Add = ({ token }) => {
           )}
         </div>
 
-        <div>
-          <p className="mb-2">Product Price</p>
-          <input
-            onChange={(e) => setPrice(e.target.value)}
-            value={price}
-            className="w-full px-3 py-2 sm:w-[120px]"
-            type="Number"
-            placeholder="25"
-            required
-          />
-        </div>
-        <div>
-          <p className="mb-2">Discount (%)</p>
-          <input
-            onChange={(e) => setDiscount(e.target.value)}
-            value={discount}
-            className="w-full px-3 py-2 sm:w-[120px]"
-            type="Number"
-            placeholder="0"
-            min="0"
-            max="100"
-          />
+        <div className="flex flex-wrap gap-4">
+          <div>
+            <p className="mb-2">Selling Price</p>
+            <input
+              onChange={(e) => setPrice(e.target.value)}
+              value={price}
+              className="w-full px-3 py-2 sm:w-[120px]"
+              type="Number"
+              placeholder="25"
+              required
+            />
+          </div>
+          <div>
+            <p className="mb-2 text-emerald-900 font-medium">Cost Price (Supplier)</p>
+            <input
+              onChange={(e) => setCostPrice(e.target.value)}
+              value={costPrice}
+              className="w-full px-3 py-2 sm:w-[130px] border border-emerald-300 bg-emerald-50/30 rounded"
+              type="Number"
+              placeholder="0"
+              min="0"
+            />
+          </div>
+          <div>
+            <p className="mb-2">Discount (%)</p>
+            <input
+              onChange={(e) => setDiscount(e.target.value)}
+              value={discount}
+              className="w-full px-3 py-2 sm:w-[110px]"
+              type="Number"
+              placeholder="0"
+              min="0"
+              max="100"
+            />
+          </div>
+          <div>
+            <p className="mb-2 text-amber-900 font-medium">Low Stock Alert</p>
+            <input
+              onChange={(e) => setLowStockThreshold(e.target.value)}
+              value={lowStockThreshold}
+              className="w-full px-3 py-2 sm:w-[120px] border border-amber-300 bg-amber-50/40 rounded"
+              type="Number"
+              placeholder="5"
+              min="1"
+            />
+          </div>
         </div>
       </div>
 
