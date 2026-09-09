@@ -17,6 +17,7 @@ const List = ({ token }) => {
   const [editCategories, setEditCategories] = useState([]);
   const [editSubCategory, setEditSubCategory] = useState("");
   const [editBestseller, setEditBestseller] = useState(false);
+  const [editNewInStore, setEditNewInStore] = useState(false);
   const [editPublished, setEditPublished] = useState(true);
   const [editVariants, setEditVariants] = useState([]);
   const [variantSize, setVariantSize] = useState("S");
@@ -110,6 +111,7 @@ const List = ({ token }) => {
     setEditCategories(cats.length > 0 ? cats : ["Men"]);
     setEditSubCategory(product.subCategory || "");
     setEditBestseller(product.bestseller || false);
+    setEditNewInStore(product.newInStore || false);
     setEditPublished(product.published !== undefined ? product.published : true);
     setEditVariants(product.variants || []);
     setVariantSize("S");
@@ -138,6 +140,7 @@ const List = ({ token }) => {
       formData.append("stockQuantity", computedStockQuantity);
       
       formData.append("bestseller", editBestseller);
+      formData.append("newInStore", editNewInStore);
       formData.append("published", editPublished);
       
       const allSizes = [...new Set(editVariants.map(v => v.size))];
@@ -227,11 +230,18 @@ const List = ({ token }) => {
             <img className="w-12 h-12 object-cover rounded" src={item.image[0]} alt="" />
             <div>
               <p className="font-medium text-gray-800">{item.name}</p>
-              {item.bestseller && (
-                <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-semibold">
-                  Bestseller
-                </span>
-              )}
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {item.newInStore && (
+                  <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded font-bold">
+                    New in Store
+                  </span>
+                )}
+                {item.bestseller && (
+                  <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-semibold">
+                    Bestseller
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex flex-wrap gap-1">
               {(item.categories && item.categories.length > 0
@@ -509,16 +519,31 @@ const List = ({ token }) => {
                 />
               </div>
 
-              <div className="flex gap-2">
-                <input
-                  type="checkbox"
-                  id="editBestseller"
-                  checked={editBestseller}
-                  onChange={(e) => setEditBestseller(e.target.checked)}
-                />
-                <label htmlFor="editBestseller" className="cursor-pointer">
-                  Bestseller Product
-                </label>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="editBestseller"
+                    checked={editBestseller}
+                    onChange={(e) => setEditBestseller(e.target.checked)}
+                  />
+                  <label htmlFor="editBestseller" className="cursor-pointer text-sm">
+                    Bestseller Product
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded">
+                  <input
+                    type="checkbox"
+                    id="editNewInStore"
+                    checked={editNewInStore}
+                    onChange={(e) => setEditNewInStore(e.target.checked)}
+                    className="accent-amber-600 cursor-pointer"
+                  />
+                  <label htmlFor="editNewInStore" className="cursor-pointer text-xs font-semibold text-amber-900">
+                    Feature as &quot;New in Store&quot; (Only 1 product active)
+                  </label>
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 mt-4">

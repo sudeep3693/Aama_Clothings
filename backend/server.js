@@ -14,6 +14,7 @@ import reviewRouter from "./routes/reviewRoute.js";
 import shippingRouter from "./routes/shippingRoute.js";
 import loyaltyRouter from "./routes/loyaltyRoute.js";
 import customerRouter from "./routes/customerRoute.js";
+import offerRouter from "./routes/offerRoute.js";
 
 // App Config
 const app = express();
@@ -45,6 +46,7 @@ app.use("/api/review", reviewRouter);
 app.use("/api/shipping", shippingRouter);
 app.use("/api/loyalty", loyaltyRouter);
 app.use("/api/customer", customerRouter);
+app.use("/api/offer", offerRouter);
 
 app.get("/", (req, res) => {
   res.send("API Working");

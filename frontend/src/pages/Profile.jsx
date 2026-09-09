@@ -378,9 +378,9 @@ const Profile = () => {
                 <div className="p-4 bg-white/5 backdrop-blur-md rounded-xl border border-white/10 space-y-2">
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-semibold text-gray-200 flex items-center gap-1.5">
-                      <span>🎯 Next Level:</span>
+                      <span>Next Level:</span>
                       <strong className="text-white">
-                        {loyalty.nextLevel.badgeIcon} {loyalty.nextLevel.name}
+                        {loyalty.nextLevel.name}
                       </strong>
                     </span>
                     <span className="font-black text-indigo-300">
@@ -403,13 +403,13 @@ const Profile = () => {
                     <span>
                       {loyalty.remainingOrders > 0
                         ? `Place ${loyalty.remainingOrders} more order(s)`
-                        : "Order requirement met! ✅"}
+                        : "Order requirement met"}
                     </span>
                   </div>
                 </div>
               ) : (
                 <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs font-bold flex items-center gap-2">
-                  <span>👑</span> Congratulations! You have reached the Maximum VIP Tier!
+                  <span>✓</span> Congratulations! You have reached the Maximum VIP Tier!
                 </div>
               )}
 
@@ -418,7 +418,7 @@ const Profile = () => {
                 {/* Active Level Perks */}
                 <div className="p-3 bg-emerald-950/40 rounded-xl border border-emerald-500/30 text-xs space-y-1">
                   <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
-                    <span>✅</span> Current Unlocked Rewards
+                    <span>✓</span> Current Unlocked Rewards
                   </p>
                   <p className="font-bold text-white text-sm">
                     {loyalty.currentLevel?.rewardTitle}
@@ -432,7 +432,7 @@ const Profile = () => {
                 {loyalty.nextLevel ? (
                   <div className="p-3 bg-indigo-950/40 rounded-xl border border-indigo-500/30 text-xs space-y-1">
                     <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1">
-                      <span>🔒</span> Unlock at Next Level ({loyalty.nextLevel.name})
+                      <span>•</span> Unlock at Next Level ({loyalty.nextLevel.name})
                     </p>
                     <p className="font-bold text-white text-sm">
                       {loyalty.nextLevel.rewardTitle}

@@ -19,6 +19,7 @@ const Add = ({ token }) => {
   const [selectedCategories, setSelectedCategories] = useState(["Men"]);
   const [subCategory, setSubCategory] = useState("Topwear");
   const [bestseller, setBestSeller] = useState(false);
+  const [newInStore, setNewInStore] = useState(false);
   const [variants, setVariants] = useState([]);
   const [variantSize, setVariantSize] = useState("S");
   const [variantColor, setVariantColor] = useState("");
@@ -136,6 +137,7 @@ const Add = ({ token }) => {
       formData.append("category", JSON.stringify(selectedCategories));
       formData.append("subCategory", finalSubCategory);
       formData.append("bestseller", bestseller);
+      formData.append("newInStore", newInStore);
       
       const computedStockQuantity = variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0);
       formData.append("stockQuantity", computedStockQuantity);
@@ -168,6 +170,8 @@ const Add = ({ token }) => {
         setImage4(false);
         setPrice("");
         setDiscount("");
+        setBestSeller(false);
+        setNewInStore(false);
         setVariants([]);
         setVariantSize("S");
         setVariantColor("");
@@ -474,29 +478,45 @@ const Add = ({ token }) => {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-6 mt-2">
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-6 mt-2">
+        <div className="flex items-center gap-2">
           <input
             onChange={() => setBestSeller((prev) => !prev)}
             checked={bestseller}
             type="checkbox"
             id="bestseller"
           />
-          <label className="cursor-pointer" htmlFor="bestseller">
+          <label className="cursor-pointer text-sm font-medium" htmlFor="bestseller">
             Add to bestseller
           </label>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <input
             onChange={() => setPublished((prev) => !prev)}
             checked={published}
             type="checkbox"
             id="published"
           />
-          <label className="cursor-pointer font-medium text-green-700" htmlFor="published">
+          <label className="cursor-pointer font-medium text-sm text-green-700" htmlFor="published">
             Publish Immediately
           </label>
         </div>
+      </div>
+
+      <div className="flex items-center gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-lg max-w-[500px]">
+        <input
+          onChange={() => setNewInStore((prev) => !prev)}
+          checked={newInStore}
+          type="checkbox"
+          id="newInStore"
+          className="w-4 h-4 accent-amber-600 cursor-pointer"
+        />
+        <label className="cursor-pointer text-xs font-semibold text-amber-900" htmlFor="newInStore">
+          Feature as &quot;New in Store&quot; (Hero Section)
+          <span className="block text-[11px] font-normal text-amber-700 mt-0.5">
+            Only 1 product can be &quot;New in Store&quot;. Checking this will replace any previously featured product.
+          </span>
+        </label>
       </div>
 
       <button type="submit" className="w-28 py-3 mt-4 bg-black text-white">

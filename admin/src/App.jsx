@@ -11,6 +11,7 @@ import ShippingSettings from "./pages/ShippingSettings";
 import Customers from "./pages/Customers";
 import LoyaltyLevels from "./pages/LoyaltyLevels";
 import CreateOrder from "./pages/CreateOrder";
+import SpecialOffers from "./pages/SpecialOffers";
 import Login from "./components/Login";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -46,6 +47,7 @@ const App = () => {
               <Routes>
                 <Route path="/add" element={<Add token={token} />} />
                 <Route path="/list" element={<List token={token} />} />
+                <Route path="/special-offers" element={<SpecialOffers token={token} />} />
                 <Route path="/create-order" element={<CreateOrder token={token} />} />
                 <Route path="/add-order" element={<CreateOrder token={token} />} />
                 <Route path="/orders" element={<Orders token={token} />} />

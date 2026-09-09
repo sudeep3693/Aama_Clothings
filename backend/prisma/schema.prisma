@@ -30,8 +30,12 @@ model Product {
   sizes           Json
   colors          Json    @default("[]")
   variants        Json    @default("[]")
-  bestseller      Boolean @default(false)
-  discount        Float   @default(0)
+  bestseller      Boolean   @default(false)
+  newInStore      Boolean   @default(false)
+  isSpecialOffer  Boolean   @default(false)
+  offerTag        String?   @default("")
+  offerEndDate    DateTime?
+  discount        Float     @default(0)
   stockQuantity   Int     @default(0)
   published       Boolean @default(true)
   date            BigInt
@@ -122,5 +126,20 @@ model CustomerLetterImage {
   notes     String?  @db.Text
   orderId   String?
   createdAt DateTime @default(now())
+}
+
+model SpecialOffer {
+  id          String   @id @default(uuid())
+  title       String
+  subtitle    String?  @default("Exclusive festive deals and limited-time discounts")
+  badgeText   String   @default("🎉 FESTIVE OFFER")
+  bannerImage String?  @default("")
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean  @default(true)
+  discount    Float?   @default(0)
+  productIds  Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 

@@ -40,6 +40,7 @@ const addProduct = async (req, res) => {
       subCategory,
       sizes,
       bestseller,
+      newInStore,
       discount,
       stockQuantity,
       colors,
@@ -67,6 +68,14 @@ const addProduct = async (req, res) => {
 
     const qty = stockQuantity !== undefined ? parseInt(stockQuantity, 10) : 0;
     const categoriesArray = normalizeCategories(category);
+    const isNewInStore = newInStore === "true" || newInStore === true;
+
+    // If marked as new in store, ensure all existing products have newInStore = false
+    if (isNewInStore) {
+      await prisma.product.updateMany({
+        data: { newInStore: false },
+      });
+    }
 
     const productData = {
       name,
@@ -77,6 +86,7 @@ const addProduct = async (req, res) => {
       sizes: typeof sizes === "string" ? JSON.parse(sizes) : sizes,
       image: imagesUrl,
       bestseller: bestseller === "true" || bestseller === true ? true : false,
+      newInStore: isNewInStore,
       discount: discount ? Number(discount) : 0,
       stockQuantity: qty,
       colors: typeof colors === "string" ? JSON.parse(colors) : colors || [],
@@ -106,6 +116,7 @@ const updateProduct = async (req, res) => {
       subCategory,
       sizes,
       bestseller,
+      newInStore,
       discount,
       stockQuantity,
       colors,
@@ -153,6 +164,18 @@ const updateProduct = async (req, res) => {
     const categoryStorage =
       category !== undefined ? JSON.stringify(normalizeCategories(category)) : undefined;
 
+    let isNewInStore = undefined;
+    if (newInStore !== undefined) {
+      isNewInStore = newInStore === "true" || newInStore === true;
+      if (isNewInStore) {
+        // Unset any other product that had newInStore = true
+        await prisma.product.updateMany({
+          where: { id: { not: id } },
+          data: { newInStore: false },
+        });
+      }
+    }
+
     const updateData = {
       ...(name && { name }),
       ...(description && { description }),
@@ -162,6 +185,7 @@ const updateProduct = async (req, res) => {
       ...(sizes && { sizes: typeof sizes === "string" ? JSON.parse(sizes) : sizes }),
       image: imagesUrl,
       ...(bestseller !== undefined && { bestseller: bestseller === "true" || bestseller === true }),
+      ...(isNewInStore !== undefined && { newInStore: isNewInStore }),
       ...(discount !== undefined && { discount: Number(discount) }),
       stockQuantity: newQty,
       ...(colors !== undefined && { colors: typeof colors === "string" ? JSON.parse(colors) : colors }),
@@ -211,9 +235,31 @@ const listProducts = async (req, res) => {
     // Admin sees all products; Public customers see only published products
     const whereCondition = isAdmin ? {} : { published: true };
 
-    const rawProducts = await prisma.product.findMany({ where: whereCondition });
+    const [rawProducts, allReviews] = await Promise.all([
+      prisma.product.findMany({
+        where: whereCondition,
+        orderBy: { date: "desc" },
+      }),
+      prisma.review.findMany({
+        select: { productId: true, rating: true },
+      }),
+    ]);
+
+    // Build rating lookup map per product
+    const reviewStatsMap = {};
+    for (const r of allReviews) {
+      if (!reviewStatsMap[r.productId]) {
+        reviewStatsMap[r.productId] = { sum: 0, count: 0 };
+      }
+      reviewStatsMap[r.productId].sum += Number(r.rating) || 5;
+      reviewStatsMap[r.productId].count += 1;
+    }
+
     const products = rawProducts.map((item) => {
       const cats = normalizeCategories(item.category);
+      const rStats = reviewStatsMap[item.id] || { sum: 0, count: 0 };
+      const avgRating = rStats.count > 0 ? Number((rStats.sum / rStats.count).toFixed(1)) : 0;
+
       return {
         ...item,
         _id: item.id,
@@ -221,8 +267,12 @@ const listProducts = async (req, res) => {
         image: toImageArray(item.image),
         categories: cats,
         category: cats.join(", "),
+        newInStore: Boolean(item.newInStore),
+        rating: avgRating,
+        reviewCount: rStats.count,
       };
     });
+
     res.json({ success: true, products });
   } catch (error) {
     console.log(error);
@@ -254,6 +304,18 @@ const singleProduct = async (req, res) => {
     if (!rawProduct) {
       return res.json({ success: false, message: "Product not found" });
     }
+
+    // Get review stats
+    const productReviews = await prisma.review.findMany({
+      where: { productId },
+      select: { rating: true },
+    });
+    let ratingSum = 0;
+    for (const r of productReviews) {
+      ratingSum += Number(r.rating) || 5;
+    }
+    const avgRating = productReviews.length > 0 ? Number((ratingSum / productReviews.length).toFixed(1)) : 0;
+
     const cats = normalizeCategories(rawProduct.category);
     const product = {
       ...rawProduct,
@@ -262,6 +324,9 @@ const singleProduct = async (req, res) => {
       image: toImageArray(rawProduct.image),
       categories: cats,
       category: cats.join(", "),
+      newInStore: Boolean(rawProduct.newInStore),
+      rating: avgRating,
+      reviewCount: productReviews.length,
     };
     res.json({ success: true, product });
   } catch (error) {
