@@ -68,60 +68,63 @@ const FestiveOfferSection = () => {
     return null;
   }
 
+  const cleanTitle = offer.title ? offer.title.replace(/🎉|✨|🎁|🔥/g, "").trim() : "Festive Special Offer";
+  const cleanBadge = offer.badgeText ? offer.badgeText.replace(/🎉|✨|🎁|🔥/g, "").trim() : "FESTIVE SPECIAL OFFER";
+
   return (
-    <div className="my-12 rounded-3xl p-6 sm:p-10 bg-gradient-to-br from-gray-900 via-neutral-900 to-black text-white shadow-xl relative overflow-hidden border border-gray-800">
-      {/* Decorative subtle ambient glows */}
-      <div className="absolute -top-24 -right-24 w-80 h-80 bg-rose-600/10 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div className="my-12 rounded-3xl p-6 sm:p-10 bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 text-white shadow-xl relative overflow-hidden border border-rose-300">
+      {/* Decorative bright festive radiant ambient glows */}
+      <div className="absolute -top-20 -right-20 w-80 h-80 bg-amber-300/30 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-red-300/30 rounded-full blur-3xl pointer-events-none"></div>
 
       {/* Header & Live Countdown */}
-      <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-6 pb-8 border-b border-gray-800">
+      <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-6 pb-8 border-b border-white/25">
         <div className="space-y-3 max-w-2xl">
-          <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-3.5 py-1 rounded-full text-xs font-semibold tracking-wider uppercase text-amber-300 border border-white/10">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-            <span>{offer.badgeText ? offer.badgeText.replace(/🎉|✨|🎁|🔥/g, "").trim() || "SPECIAL OFFER" : "LIMITED TIME OFFER"}</span>
+          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-4 py-1 rounded-full text-xs font-bold tracking-wider uppercase text-amber-100 border border-white/30 shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-amber-300 animate-pulse"></span>
+            <span>{cleanBadge || "FESTIVE SPECIAL OFFER"}</span>
           </div>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white">
-            {offer.title.replace(/🎉|✨|🎁|🔥/g, "").trim()}
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-white drop-shadow-sm">
+            {cleanTitle}
           </h2>
-          <p className="text-sm sm:text-base text-gray-400 max-w-xl font-normal">
+          <p className="text-sm sm:text-base text-rose-50 max-w-xl font-medium leading-relaxed">
             {offer.subtitle}
           </p>
         </div>
 
         {/* Live Timer Card */}
-        <div className="bg-white/5 backdrop-blur-md px-6 py-4 rounded-2xl border border-white/10 shadow-lg flex flex-col items-center sm:items-start gap-1.5 self-start lg:self-auto">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-amber-400 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
-            OFFER ENDS IN:
+        <div className="bg-black/25 backdrop-blur-md px-6 py-4 rounded-2xl border border-white/30 shadow-lg flex flex-col items-center sm:items-start gap-1.5 self-start lg:self-auto">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-amber-200 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-300 animate-ping"></span>
+            FESTIVE OFFER ENDS IN:
           </p>
           <div className="flex items-center gap-2 sm:gap-3 text-center pt-1">
-            <div className="bg-white/10 px-3.5 py-2 rounded-xl min-w-[56px] border border-white/5">
-              <span className="text-xl sm:text-2xl font-bold text-white block">
+            <div className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-xl min-w-[56px] border border-white/20 shadow-xs">
+              <span className="text-xl sm:text-2xl font-black text-white block">
                 {String(timeLeft.days).padStart(2, "0")}
               </span>
-              <span className="text-[9px] uppercase font-medium text-gray-400">Days</span>
+              <span className="text-[9px] uppercase font-bold text-amber-100">Days</span>
             </div>
-            <span className="text-xl font-bold text-white/40">:</span>
-            <div className="bg-white/10 px-3.5 py-2 rounded-xl min-w-[56px] border border-white/5">
-              <span className="text-xl sm:text-2xl font-bold text-white block">
+            <span className="text-xl font-bold text-white/80">:</span>
+            <div className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-xl min-w-[56px] border border-white/20 shadow-xs">
+              <span className="text-xl sm:text-2xl font-black text-white block">
                 {String(timeLeft.hours).padStart(2, "0")}
               </span>
-              <span className="text-[9px] uppercase font-medium text-gray-400">Hours</span>
+              <span className="text-[9px] uppercase font-bold text-amber-100">Hours</span>
             </div>
-            <span className="text-xl font-bold text-white/40">:</span>
-            <div className="bg-white/10 px-3.5 py-2 rounded-xl min-w-[56px] border border-white/5">
-              <span className="text-xl sm:text-2xl font-bold text-white block">
+            <span className="text-xl font-bold text-white/80">:</span>
+            <div className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-xl min-w-[56px] border border-white/20 shadow-xs">
+              <span className="text-xl sm:text-2xl font-black text-white block">
                 {String(timeLeft.minutes).padStart(2, "0")}
               </span>
-              <span className="text-[9px] uppercase font-medium text-gray-400">Mins</span>
+              <span className="text-[9px] uppercase font-bold text-amber-100">Mins</span>
             </div>
-            <span className="text-xl font-bold text-white/40">:</span>
-            <div className="bg-white/10 px-3.5 py-2 rounded-xl min-w-[56px] border border-white/5">
-              <span className="text-xl sm:text-2xl font-bold text-white block">
+            <span className="text-xl font-bold text-white/80">:</span>
+            <div className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-xl min-w-[56px] border border-white/20 shadow-xs">
+              <span className="text-xl sm:text-2xl font-black text-white block">
                 {String(timeLeft.seconds).padStart(2, "0")}
               </span>
-              <span className="text-[9px] uppercase font-medium text-gray-400">Secs</span>
+              <span className="text-[9px] uppercase font-bold text-amber-100">Secs</span>
             </div>
           </div>
         </div>
@@ -133,7 +136,7 @@ const FestiveOfferSection = () => {
           {offer.products.slice(0, 10).map((item) => (
             <div
               key={item._id}
-              className="bg-white p-2.5 rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
+              className="bg-white p-3 rounded-2xl shadow-lg border border-rose-100 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
             >
               <ProductItem
                 id={item._id}
@@ -151,14 +154,14 @@ const FestiveOfferSection = () => {
           ))}
         </div>
 
-        <div className="text-center mt-8">
+        <div className="text-center mt-9">
           <Link
             to="/collection"
-            className="inline-flex items-center gap-2 bg-white hover:bg-gray-100 text-gray-900 px-7 py-3 rounded-full font-semibold text-sm transition-all shadow-md hover:shadow-lg"
+            className="inline-flex items-center gap-2 bg-white hover:bg-rose-50 text-red-600 font-bold px-8 py-3.5 rounded-full text-sm transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
           >
-            <span>Explore All Special Deals</span>
+            <span>Explore All Festive Deals</span>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
             </svg>
           </Link>
         </div>

@@ -177,21 +177,23 @@ const SpecialOffers = ({ token }) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-gray-200 shadow-xs">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-red-50 via-rose-50 to-amber-50 p-6 rounded-2xl border border-red-200 shadow-xs">
         <div>
-          <div className="flex items-center gap-2">
-            <svg className="w-6 h-6 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-            </svg>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Festival & Special Offers</h1>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-red-600 text-white flex items-center justify-center shadow-xs">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-bold text-red-950">Festival &amp; Special Offers</h1>
           </div>
-          <p className="text-xs sm:text-sm text-gray-500 mt-1 max-w-xl">
-            Create automated holiday promotions with live countdown timers and auto-expiry.
+          <p className="text-xs sm:text-sm text-red-800/80 mt-1 max-w-xl">
+            Create automated holiday promotions (Dashain, Tihar, Festive Deals) with bright celebratory themes, live countdowns, and auto-expiry.
           </p>
         </div>
         <button
           onClick={openNewModal}
-          className="bg-black hover:bg-gray-800 text-white font-medium text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-xs transition-all"
+          className="bg-red-600 hover:bg-red-700 text-white font-semibold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-xs transition-all"
         >
           + Create Festival Offer
         </button>
