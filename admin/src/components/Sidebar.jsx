@@ -183,8 +183,26 @@ const Sidebar = () => {
         </div>
       </div>
 
-      {/* Footer System Status */}
-      <div className="pt-4 border-t border-slate-100">
+      {/* Footer */}
+      <div className="pt-4 border-t border-slate-100 space-y-3">
+        {/* Admin Settings */}
+        <div>
+          <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+            Admin Settings
+          </p>
+          <NavLink to="/change-password" className={navLinkStyle}>
+            {({ isActive }) => (
+              <>
+                <svg className={iconStyle(isActive)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <span>Change Password</span>
+              </>
+            )}
+          </NavLink>
+        </div>
+
+        {/* System Status */}
         <div className="flex items-center gap-2 px-2 py-1.5 bg-slate-50 rounded-xl">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           <div className="text-[11px] leading-tight">

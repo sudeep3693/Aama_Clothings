@@ -9,13 +9,18 @@ import {
   deleteUserAddress,
   adminLogin,
 } from "../controllers/userController.js";
+import { adminChangePassword } from "../controllers/adminController.js";
 import authUser from "../middleware/auth.js";
+import { authAdmin } from "../middleware/auth.js";
 
 const userRouter = express.Router();
 
 userRouter.post("/register", registerUser);
 userRouter.post("/login", loginUser);
 userRouter.post("/admin", adminLogin);
+
+// Admin Authenticated Routes
+userRouter.post("/admin/change-password", authAdmin, adminChangePassword);
 
 // Customer Authenticated Routes
 userRouter.get("/profile", authUser, getUserProfile);

@@ -15,6 +15,7 @@ import SpecialOffers from "./pages/SpecialOffers";
 import Inventory from "./pages/Inventory";
 import CogsCalculator from "./pages/CogsCalculator";
 import Login from "./components/Login";
+import ChangePassword from "./pages/ChangePassword";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -60,6 +61,7 @@ const App = () => {
                   <Route path="/categories" element={<Categories token={token} />} />
                   <Route path="/reviews" element={<Reviews token={token} />} />
                   <Route path="/shipping" element={<ShippingSettings token={token} />} />
+                  <Route path="/change-password" element={<ChangePassword token={token} />} />
                 </Routes>
               </div>
             </main>
