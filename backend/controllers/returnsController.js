@@ -1,4 +1,5 @@
 import { prisma } from "../config/db.js";
+import { postCustomerReturnAccounting } from "../services/accountingPostingEngine.js";
 
 // ==========================================
 // 1. CUSTOMER RETURNS (RMA & REFUNDS)
@@ -180,6 +181,14 @@ export const createCustomerReturn = async (req, res) => {
         },
       });
     }
+
+    // Post to Double-Entry General Ledger (Sales Returns & Allowances / Output VAT / Cash or AP)
+    postCustomerReturnAccounting(returnRecord, {
+      refundFromAccountId,
+      recordAsPayable,
+    }).catch((glErr) => {
+      console.error("General Ledger customer return posting error:", glErr);
+    });
 
     res.json({
       success: true,

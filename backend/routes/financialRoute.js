@@ -26,6 +26,7 @@ import {
   settlePayable,
   collectReceivable,
   getVATAndTaxReport,
+  recordOperatingExpense,
   getFinancialStatements,
 } from "../controllers/financialController.js";
 import adminAuth from "../middleware/adminAuth.js";
@@ -35,10 +36,11 @@ const financialRouter = express.Router();
 // Executive Analytics & Overview
 financialRouter.get("/dashboard", adminAuth, getFinancialAnalyticsDashboard);
 
-// Treasury & Liquid Cash
+// Treasury & Liquid Cash & Expenses
 financialRouter.get("/treasury-accounts", adminAuth, getTreasuryAccounts);
 financialRouter.post("/create-account", adminAuth, createTreasuryAccount);
 financialRouter.post("/cash-transfer", adminAuth, recordCashTransfer);
+financialRouter.post("/record-operating-expense", adminAuth, recordOperatingExpense);
 financialRouter.get("/cash-transactions", adminAuth, getCashTransactions);
 
 // Fixed Assets & Depreciation

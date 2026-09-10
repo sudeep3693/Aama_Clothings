@@ -1,4 +1,14 @@
 import { prisma } from "../config/db.js";
+import {
+  postFixedAssetPurchaseAccounting,
+  postDepreciationAccounting,
+  postLoanDisbursementAccounting,
+  postLoanRepaymentAccounting,
+  postShareIssuanceAccounting,
+  postShareBuybackAccounting,
+  postSupplierPaymentAccounting,
+  postDirectExpenseAccounting,
+} from "../services/accountingPostingEngine.js";
 
 // Helper to get current Year-Month
 const getCurrentYearMonth = () => {
@@ -388,16 +398,18 @@ export const recordCashTransfer = async (req, res) => {
 
     // 3. Direct Outflow
     if (type === "OUTFLOW" && fromAccountId) {
+      const { partyName, payeeName, invoiceNumber } = req.body;
+      const finalPayeeName = (partyName || payeeName || "Vendor / Payee").trim();
       const fromAccount = await prisma.financialAccount.findUnique({ where: { id: fromAccountId } });
       if (!fromAccount) {
         return res.json({ success: false, message: "Source account not found" });
       }
 
-      // CRITICAL CHECK: Overdraft protection
+      // CRITICAL CHECK: Overdraft protection / Capital Solvency
       if (fromAccount.currentBalance < transferAmount) {
         return res.json({
           success: false,
-          message: `Cannot deduct Rs ${transferAmount.toLocaleString()} from ${fromAccount.accountName}. Current balance is Rs ${fromAccount.currentBalance.toLocaleString()}. You can record this expense as an Accounts Payable (Liability) to pay later when funds are available.`,
+          message: `Capital Solvency Constraint: Cannot deduct Rs ${transferAmount.toLocaleString()} from ${fromAccount.accountName}. Available liquid balance is Rs ${fromAccount.currentBalance.toLocaleString()} (Shortfall: Rs ${(transferAmount - fromAccount.currentBalance).toLocaleString()}). You cannot execute cash disbursements beyond available liquid capital. You can record this expense as an Accounts Payable (Liability) to pay later when funds are available.`,
         });
       }
 
@@ -412,11 +424,24 @@ export const recordCashTransfer = async (req, res) => {
             type: "OUTFLOW",
             fromAccountId,
             category: category || "EXPENSE",
-            description: description || "Direct cash payment",
+            partyName: finalPayeeName,
+            invoiceNumber: invoiceNumber ? invoiceNumber.trim() : "",
+            description: description || `Payment to ${finalPayeeName}`,
           },
         }),
       ]);
-      return res.json({ success: true, message: "Outflow payment recorded successfully" });
+      // Post Direct Outflow Expense to Double-Entry General Ledger
+      postDirectExpenseAccounting({
+        amount: transferAmount,
+        category: category || "EXPENSE",
+        description: description || `Payment to ${finalPayeeName}`,
+        payeeName: finalPayeeName,
+        fromAccountId,
+      }).catch((glErr) => {
+        console.error("General Ledger direct expense posting error:", glErr);
+      });
+
+      return res.json({ success: true, message: `Outflow payment of Rs ${transferAmount.toLocaleString()} to ${finalPayeeName} recorded successfully` });
     }
 
     res.json({ success: false, message: "Invalid transaction parameters" });
@@ -470,8 +495,11 @@ export const createFixedAsset = async (req, res) => {
       depreciationMethod,
       usefulLifeMonths,
       paidFromAccountId,
+      settlementType = "CREDIT_PAYABLE", // FULL_CASH, CREDIT_PAYABLE, PARTIAL
       recordAsPayable = false,
+      upfrontPaidAmount,
       vendorName,
+      invoiceNumber,
       dueDate,
     } = req.body;
 
@@ -484,16 +512,41 @@ export const createFixedAsset = async (req, res) => {
       return res.json({ success: false, message: "Purchase cost must be greater than zero" });
     }
 
-    // If paid from liquid cash account, verify balance first!
-    if (paidFromAccountId && !recordAsPayable) {
-      const payingAccount = await prisma.financialAccount.findUnique({ where: { id: paidFromAccountId } });
+    const finalVendorName = (vendorName && vendorName.trim()) || "Asset Vendor";
+
+    // Determine Settlement Breakdown (Cash vs Payable)
+    let paidAmount = 0;
+    let payableAmount = 0;
+
+    if (settlementType === "FULL_CASH" || (paidFromAccountId && !recordAsPayable && settlementType !== "PARTIAL" && settlementType !== "CREDIT_PAYABLE")) {
+      paidAmount = cost;
+      payableAmount = 0;
+    } else if (settlementType === "PARTIAL") {
+      paidAmount = Math.min(cost, Math.max(0, Number(upfrontPaidAmount || 0)));
+      payableAmount = Number((cost - paidAmount).toFixed(2));
+    } else {
+      // CREDIT_PAYABLE
+      paidAmount = 0;
+      payableAmount = cost;
+    }
+
+    // Capital Solvency Verification on the upfront cash portion
+    let payingAccount = null;
+    if (paidAmount > 0) {
+      if (!paidFromAccountId) {
+        return res.json({
+          success: false,
+          message: "Please select a Treasury / Bank account to disburse the upfront cash payment.",
+        });
+      }
+      payingAccount = await prisma.financialAccount.findUnique({ where: { id: paidFromAccountId } });
       if (!payingAccount) {
         return res.json({ success: false, message: "Selected payment account not found" });
       }
-      if (payingAccount.currentBalance < cost) {
+      if (payingAccount.currentBalance < paidAmount) {
         return res.json({
           success: false,
-          message: `Insufficient funds in ${payingAccount.accountName} (Balance: Rs ${payingAccount.currentBalance.toLocaleString()}) to pay Rs ${cost.toLocaleString()}. Select 'Purchase on Credit / Record as Payable' instead to register as a liability without deducting cash.`,
+          message: `Capital Solvency Constraint: Cannot pay Rs ${paidAmount.toLocaleString()} from ${payingAccount.accountName}. Available liquid balance is Rs ${payingAccount.currentBalance.toLocaleString()} (Shortfall: Rs ${(paidAmount - payingAccount.currentBalance).toLocaleString()}). Select 'Purchase on Credit / Record as Payable' or reduce the upfront payment amount.`,
         });
       }
     }
@@ -515,6 +568,8 @@ export const createFixedAsset = async (req, res) => {
         assetName: assetName.trim(),
         assetTag: tag,
         category: category || "COMPUTERS_IT",
+        vendorName: finalVendorName,
+        invoiceNumber: invoiceNumber ? invoiceNumber.trim() : "",
         purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
         purchaseCost: cost,
         salvageValue: Number(salvageValue || 0),
@@ -523,58 +578,218 @@ export const createFixedAsset = async (req, res) => {
         usefulLifeMonths: Number(usefulLifeMonths || 60),
         accumulatedDepreciation: 0,
         currentBookValue: cost,
+        paidFromAccountId: paidAmount > 0 ? paidFromAccountId : null,
+        paidAmount,
+        payableAmount,
         status: "ACTIVE",
       },
     });
 
-    // 2. Handle Payment Deduction OR Payable Liability Record
-    if (paidFromAccountId && !recordAsPayable) {
-      // Deduct from Treasury Account
+    // 2. Handle Upfront Cash Deduction
+    if (paidAmount > 0 && payingAccount) {
       await prisma.$transaction([
         prisma.financialAccount.update({
           where: { id: paidFromAccountId },
-          data: { currentBalance: { decrement: cost } },
+          data: { currentBalance: { decrement: paidAmount } },
         }),
         prisma.cashTransaction.create({
           data: {
-            amount: cost,
+            amount: paidAmount,
             type: "OUTFLOW",
             fromAccountId: paidFromAccountId,
             category: "ASSET_PURCHASE",
+            partyName: finalVendorName,
+            invoiceNumber: invoiceNumber || "",
             referenceId: asset.id,
-            description: `Asset Purchase: ${asset.assetName} (${tag})`,
+            description: `Asset Purchase Upfront Payment: ${asset.assetName} (${tag}) to ${finalVendorName}`,
           },
         }),
       ]);
-    } else {
-      // Record as an Accounts Payable (Liability)
-      await prisma.accountPayable.create({
+    }
+
+    // 3. Handle Remaining Payable Liability Record
+    let payableRecord = null;
+    if (payableAmount > 0) {
+      payableRecord = await prisma.accountPayable.create({
         data: {
           title: `Asset Purchase: ${asset.assetName} (${tag})`,
-          payeeName: vendorName ? vendorName.trim() : "Asset Vendor / Supplier",
+          payeeName: finalVendorName,
           category: "ASSET_PURCHASE",
           referenceType: "FIXED_ASSET",
           referenceId: asset.id,
-          totalAmount: cost,
+          totalAmount: payableAmount,
           paidAmount: 0,
-          remainingBalance: cost,
+          remainingBalance: payableAmount,
           dueDate: dueDate ? new Date(dueDate) : null,
+          invoiceNumber: invoiceNumber || "",
           status: "UNPAID",
           priority: "MEDIUM",
-          notes: `Asset ${asset.assetName} (${tag}) acquired on credit. Settle from Liquid Treasury when funds are available.`,
+          notes: `Asset ${asset.assetName} (${tag}) acquired with Rs ${payableAmount.toLocaleString()} credit balance owed to ${finalVendorName}. Settle from Liquid Treasury when funds are available.`,
+        },
+      });
+
+      await prisma.fixedAsset.update({
+        where: { id: asset.id },
+        data: { payableId: payableRecord.id },
+      });
+    }
+
+    // Post Fixed Asset Acquisition to Double-Entry General Ledger
+    postFixedAssetPurchaseAccounting({
+      ...asset,
+      paidAmount,
+      payableAmount,
+      vendorName: finalVendorName,
+    }).catch((glErr) => {
+      console.error("General Ledger fixed asset posting error:", glErr);
+    });
+
+    res.json({
+      success: true,
+      message:
+        paidAmount > 0 && payableAmount > 0
+          ? `Fixed asset ${asset.assetName} acquired: Rs ${paidAmount.toLocaleString()} paid from ${payingAccount?.accountName || "treasury"} and Rs ${payableAmount.toLocaleString()} registered under Accounts Payable to ${finalVendorName}.`
+          : paidAmount > 0
+          ? `Fixed asset ${asset.assetName} fully purchased (Rs ${paidAmount.toLocaleString()}) from ${payingAccount?.accountName || "treasury"}.`
+          : `Fixed asset ${asset.assetName} recorded and registered under Accounts Payable (Rs ${payableAmount.toLocaleString()}) to ${finalVendorName}.`,
+      asset,
+      payable: payableRecord,
+    });
+  } catch (error) {
+    console.error("Create Fixed Asset Error:", error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// ==========================================
+// 3b. DIRECT OPERATING EXPENSE BOOKING (CASH / PAYABLE / PARTIAL)
+// ==========================================
+export const recordOperatingExpense = async (req, res) => {
+  try {
+    const {
+      title,
+      category = "OPERATING_EXPENSE", // SALARIES, RENT, UTILITIES, MARKETING, SOFTWARE, MISC
+      amount,
+      payeeName,
+      invoiceNumber,
+      paymentMethod = "FULL_CASH", // FULL_CASH, CREDIT_PAYABLE, PARTIAL
+      paidFromAccountId,
+      upfrontPaidAmount,
+      dueDate,
+      notes,
+    } = req.body;
+
+    const totalCost = Number(amount || 0);
+    if (!title || totalCost <= 0) {
+      return res.json({ success: false, message: "Expense title and a positive amount are required." });
+    }
+
+    const finalPayee = (payeeName && payeeName.trim()) || "Vendor / Service Provider";
+
+    let paidAmt = 0;
+    let payableAmt = 0;
+
+    if (paymentMethod === "FULL_CASH") {
+      paidAmt = totalCost;
+      payableAmt = 0;
+    } else if (paymentMethod === "PARTIAL") {
+      paidAmt = Math.min(totalCost, Math.max(0, Number(upfrontPaidAmount || 0)));
+      payableAmt = Number((totalCost - paidAmt).toFixed(2));
+    } else {
+      // CREDIT_PAYABLE
+      paidAmt = 0;
+      payableAmt = totalCost;
+    }
+
+    // Solvency Check on Cash Portion
+    let payingAccount = null;
+    if (paidAmt > 0) {
+      if (!paidFromAccountId) {
+        return res.json({ success: false, message: "Please select a Treasury / Bank account to disburse the cash payment." });
+      }
+      payingAccount = await prisma.financialAccount.findUnique({ where: { id: paidFromAccountId } });
+      if (!payingAccount) {
+        return res.json({ success: false, message: "Selected payment account not found" });
+      }
+      if (payingAccount.currentBalance < paidAmt) {
+        return res.json({
+          success: false,
+          message: `Capital Solvency Constraint: Cannot pay Rs ${paidAmt.toLocaleString()} from ${payingAccount.accountName}. Available liquid balance is Rs ${payingAccount.currentBalance.toLocaleString()} (Shortfall: Rs ${(paidAmt - payingAccount.currentBalance).toLocaleString()}). Please record as Accounts Payable (on credit) or reduce the upfront payment.`,
+        });
+      }
+    }
+
+    const expenseRefId = `EXP-${Date.now().toString().slice(-6)}`;
+
+    // 1. Cash Deduction
+    if (paidAmt > 0 && payingAccount) {
+      await prisma.$transaction([
+        prisma.financialAccount.update({
+          where: { id: paidFromAccountId },
+          data: { currentBalance: { decrement: paidAmt } },
+        }),
+        prisma.cashTransaction.create({
+          data: {
+            amount: paidAmt,
+            type: "OUTFLOW",
+            fromAccountId: paidFromAccountId,
+            category: "EXPENSE",
+            partyName: finalPayee,
+            invoiceNumber: invoiceNumber || "",
+            referenceId: expenseRefId,
+            description: `${title} paid to ${finalPayee}`,
+          },
+        }),
+      ]);
+    }
+
+    // 2. Payable Liability Record
+    let payableRecord = null;
+    if (payableAmt > 0) {
+      payableRecord = await prisma.accountPayable.create({
+        data: {
+          title: `${title} (${finalPayee})`,
+          payeeName: finalPayee,
+          category: "OPERATING_EXPENSE",
+          referenceType: "EXPENSE",
+          referenceId: expenseRefId,
+          totalAmount: payableAmt,
+          paidAmount: 0,
+          remainingBalance: payableAmt,
+          dueDate: dueDate ? new Date(dueDate) : null,
+          invoiceNumber: invoiceNumber || "",
+          priority: "MEDIUM",
+          status: "UNPAID",
+          notes: notes || `Operating expense owed to ${finalPayee}. Total expense Rs ${totalCost.toLocaleString()}, upfront paid Rs ${paidAmt.toLocaleString()}, remaining payable Rs ${payableAmt.toLocaleString()}.`,
         },
       });
     }
 
+    // 3. Post to General Ledger
+    postDirectExpenseAccounting({
+      expenseId: expenseRefId,
+      category,
+      title,
+      amount: totalCost,
+      fromAccountId: paidAmt > 0 ? paidFromAccountId : null,
+      isPayable: payableAmt > 0,
+      payeeName: finalPayee,
+    }).catch((glErr) => {
+      console.error("General Ledger operating expense posting error:", glErr);
+    });
+
     res.json({
       success: true,
-      message: paidFromAccountId && !recordAsPayable
-        ? "Fixed asset purchased and deducted from liquid treasury"
-        : "Fixed asset recorded and registered under Accounts Payable (Liability)",
-      asset,
+      message:
+        paidAmt > 0 && payableAmt > 0
+          ? `Expense recorded: Rs ${paidAmt.toLocaleString()} paid from ${payingAccount?.accountName || "treasury"} and Rs ${payableAmt.toLocaleString()} registered under Accounts Payable to ${finalPayee}.`
+          : paidAmt > 0
+          ? `Expense fully paid (Rs ${paidAmt.toLocaleString()}) from ${payingAccount?.accountName || "treasury"} to ${finalPayee}.`
+          : `Expense registered under Accounts Payable (Rs ${payableAmt.toLocaleString()}) to ${finalPayee}.`,
+      payable: payableRecord,
     });
   } catch (error) {
-    console.error("Create Fixed Asset Error:", error);
+    console.error("Record Operating Expense Error:", error);
     res.json({ success: false, message: error.message });
   }
 };
@@ -619,6 +834,17 @@ export const runDepreciationBatch = async (req, res) => {
 
       totalDepreciated += depAmount;
       updatedAssets.push(updated);
+    }
+
+    // Post Depreciation Batch to Double-Entry General Ledger
+    if (totalDepreciated > 0) {
+      postDepreciationAccounting({
+        totalDepreciation: totalDepreciated,
+        count: updatedAssets.length,
+        date: new Date(),
+      }).catch((glErr) => {
+        console.error("General Ledger depreciation posting error:", glErr);
+      });
     }
 
     res.json({
@@ -1023,6 +1249,17 @@ export const issueNewShares = async (req, res) => {
       },
     });
 
+    // Post Primary Share Issuance to Double-Entry General Ledger
+    postShareIssuanceAccounting({
+      investorPartner,
+      valuationRecord,
+      invAmt,
+      newSharesIssued,
+      depositAccountId,
+    }).catch((glErr) => {
+      console.error("General Ledger share issuance posting error:", glErr);
+    });
+
     res.json({
       success: true,
       message: `Successfully issued ${newSharesIssued.toLocaleString()} new shares to ${investorName}. Post-Money Valuation is Rs ${postMoneyValuation.toLocaleString()} and treasury capital updated.`,
@@ -1162,6 +1399,17 @@ export const transferOrSellShare = async (req, res) => {
           settlementType: "COMPANY_TREASURY",
           notes: notes || `Company repurchased and retired ${sharesCount.toLocaleString()} shares from ${seller.partnerName}.`,
         },
+      });
+
+      // Post Share Buyback to Double-Entry General Ledger
+      postShareBuybackAccounting({
+        seller,
+        sharesCount,
+        unitPrice,
+        totalTransactionValue,
+        fromTreasuryAccountId,
+      }).catch((glErr) => {
+        console.error("General Ledger share buyback posting error:", glErr);
       });
 
       return res.json({
@@ -1628,6 +1876,11 @@ export const recordInvestorFinancing = async (req, res) => {
       ]);
     }
 
+    // Post Loan Disbursement to Double-Entry General Ledger
+    postLoanDisbursementAccounting(record).catch((glErr) => {
+      console.error("General Ledger loan disbursement posting error:", glErr);
+    });
+
     res.json({
       success: true,
       message: `Financing facility registered. Principal Rs ${principal.toLocaleString()} disbursed to treasury with monthly EMI Rs ${amortization.emi.toLocaleString()}.`,
@@ -1730,6 +1983,17 @@ export const recordLiabilityRepayment = async (req, res) => {
         }),
       ]);
     }
+
+    // Post Loan Repayment to Double-Entry General Ledger
+    postLoanRepaymentAccounting({
+      liability: updated,
+      amount,
+      principalPortion: pPortion,
+      interestPortion: iPortion,
+      fromAccountId,
+    }).catch((glErr) => {
+      console.error("General Ledger loan repayment posting error:", glErr);
+    });
 
     res.json({
       success: true,
@@ -1978,6 +2242,14 @@ export const settlePayable = async (req, res) => {
         });
       }
     }
+
+    // Post Supplier / Accounts Payable settlement to Double-Entry General Ledger
+    postSupplierPaymentAccounting(payable, {
+      amount: settleAmount,
+      fromAccountId,
+    }).catch((glErr) => {
+      console.error("General Ledger AP settlement posting error:", glErr);
+    });
 
     res.json({
       success: true,

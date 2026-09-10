@@ -34,6 +34,8 @@ const TreasuryCash = ({ token }) => {
     type: "INFLOW", // INFLOW or OUTFLOW
     accountId: "",
     amount: "",
+    partyName: "",
+    invoiceNumber: "",
     category: "CAPITAL_INJECTION",
     description: "",
   });
@@ -116,6 +118,8 @@ const TreasuryCash = ({ token }) => {
       const payload = {
         type: directEntry.type,
         amount: directEntry.amount,
+        partyName: directEntry.partyName,
+        invoiceNumber: directEntry.invoiceNumber,
         category: directEntry.category,
         description: directEntry.description,
         fromAccountId: directEntry.type === "OUTFLOW" ? directEntry.accountId : null,
@@ -127,7 +131,15 @@ const TreasuryCash = ({ token }) => {
       if (res.data.success) {
         toast.success(`${directEntry.type} recorded successfully`);
         setShowDirectEntry(false);
-        setDirectEntry({ type: "INFLOW", accountId: "", amount: "", category: "CAPITAL_INJECTION", description: "" });
+        setDirectEntry({
+          type: "INFLOW",
+          accountId: "",
+          amount: "",
+          partyName: "",
+          invoiceNumber: "",
+          category: "CAPITAL_INJECTION",
+          description: "",
+        });
         fetchData();
       } else {
         toast.error(res.data.message);
@@ -541,104 +553,147 @@ const TreasuryCash = ({ token }) => {
               </button>
             </div>
 
-            <form onSubmit={handleDirectEntry} className="space-y-4 mt-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Entry Type</label>
-                  <select
-                    value={directEntry.type}
-                    onChange={(e) => setDirectEntry({ ...directEntry, type: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900 font-bold"
-                  >
-                    <option value="INFLOW">🟢 Cash Inflow (+)</option>
-                    <option value="OUTFLOW">🔴 Cash Outflow (-)</option>
-                  </select>
-                </div>
+            {(() => {
+              const selectedAcc = accounts.find((a) => a.id === directEntry.accountId);
+              const isOverdraft = directEntry.type === "OUTFLOW" && selectedAcc && Number(selectedAcc.currentBalance || 0) < Number(directEntry.amount || 0);
 
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Target Account *</label>
-                  <select
-                    value={directEntry.accountId}
-                    onChange={(e) => setDirectEntry({ ...directEntry, accountId: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
-                    required
-                  >
-                    <option value="">Select account...</option>
-                    {accounts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.accountName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              return (
+                <form onSubmit={handleDirectEntry} className="space-y-4 mt-4 text-xs">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">Entry Type</label>
+                      <select
+                        value={directEntry.type}
+                        onChange={(e) => setDirectEntry({ ...directEntry, type: e.target.value })}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900 font-bold"
+                      >
+                        <option value="INFLOW">🟢 Cash Inflow (+)</option>
+                        <option value="OUTFLOW">🔴 Cash Outflow (-)</option>
+                      </select>
+                    </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Category</label>
-                  <select
-                    value={directEntry.category}
-                    onChange={(e) => setDirectEntry({ ...directEntry, category: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
-                  >
-                    {directEntry.type === "INFLOW" ? (
-                      <>
-                        <option value="CAPITAL_INJECTION">Owner Capital Injection</option>
-                        <option value="SALES">Direct Sales Income</option>
-                        <option value="LOAN_DISBURSEMENT">Loan Received</option>
-                        <option value="MISC_INFLOW">Other Income</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="EXPENSE">Direct Operating Expense</option>
-                        <option value="DRAWINGS">Owner / Partner Drawings</option>
-                        <option value="LOAN_REPAYMENT">Loan Principal Repayment</option>
-                        <option value="SUPPLIER_PAYMENT">Vendor Direct Settlement</option>
-                      </>
-                    )}
-                  </select>
-                </div>
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">Target Account *</label>
+                      <select
+                        value={directEntry.accountId}
+                        onChange={(e) => setDirectEntry({ ...directEntry, accountId: e.target.value })}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
+                        required
+                      >
+                        <option value="">Select account...</option>
+                        {accounts.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.accountName} ({currency}{Number(a.currentBalance || 0).toLocaleString()})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Amount ({currency}) *</label>
-                  <input
-                    type="number"
-                    placeholder="10000"
-                    value={directEntry.amount}
-                    onChange={(e) => setDirectEntry({ ...directEntry, amount: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
-                    required
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">Category</label>
+                      <select
+                        value={directEntry.category}
+                        onChange={(e) => setDirectEntry({ ...directEntry, category: e.target.value })}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
+                      >
+                        {directEntry.type === "INFLOW" ? (
+                          <>
+                            <option value="CAPITAL_INJECTION">Owner Capital Injection</option>
+                            <option value="SALES">Direct Sales Income</option>
+                            <option value="LOAN_DISBURSEMENT">Loan Received</option>
+                            <option value="MISC_INFLOW">Other Income</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="EXPENSE">Direct Operating Expense</option>
+                            <option value="DRAWINGS">Owner / Partner Drawings</option>
+                            <option value="LOAN_REPAYMENT">Loan Principal Repayment</option>
+                            <option value="SUPPLIER_PAYMENT">Vendor Direct Settlement</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Description / Memo</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Office emergency renovation expense"
-                  value={directEntry.description}
-                  onChange={(e) => setDirectEntry({ ...directEntry, description: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
-                />
-              </div>
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">Amount ({currency}) *</label>
+                      <input
+                        type="number"
+                        placeholder="10000"
+                        value={directEntry.amount}
+                        onChange={(e) => setDirectEntry({ ...directEntry, amount: e.target.value })}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900 font-mono font-bold"
+                        required
+                      />
+                    </div>
+                  </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowDirectEntry(false)}
-                  className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700"
-                >
-                  Record Entry
-                </button>
-              </div>
-            </form>
+                  {/* Party Name & Invoice Number */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">
+                        {directEntry.type === "OUTFLOW" ? "Payee / Paid To *" : "Payer / Received From *"}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={directEntry.type === "OUTFLOW" ? "e.g. WorldLink ISP / Landlord" : "e.g. Angel Investor / Client"}
+                        value={directEntry.partyName}
+                        onChange={(e) => setDirectEntry({ ...directEntry, partyName: e.target.value })}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">Invoice / Receipt Ref #</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. REC-2026-004"
+                        value={directEntry.invoiceNumber}
+                        onChange={(e) => setDirectEntry({ ...directEntry, invoiceNumber: e.target.value })}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900 font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Solvency feedback */}
+                  {isOverdraft && (
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-bold">
+                      ⚠️ Insufficient liquid funds! Account has {currency}{Number(selectedAcc?.currentBalance || 0).toLocaleString()} available, but {currency}{Number(directEntry.amount || 0).toLocaleString()} requested. Outflow cannot proceed without available capital.
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Description / Memo</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Monthly internet bandwidth bill"
+                      value={directEntry.description}
+                      onChange={(e) => setDirectEntry({ ...directEntry, description: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setShowDirectEntry(false)}
+                      className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isOverdraft}
+                      className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      Record Entry
+                    </button>
+                  </div>
+                </form>
+              );
+            })()}
           </div>
         </div>
       )}

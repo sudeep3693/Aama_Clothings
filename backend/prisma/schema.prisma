@@ -163,10 +163,19 @@ model StockLog {
 model InboundShipment {
   id               String   @id @default(uuid())
   batchNumber      String   @unique
+  supplierName     String   @default("") // Whom purchased from
+  invoiceNumber    String?  @default("")
   carrier          String   @default("Local Freight")
   shipmentDate     DateTime
   totalFreightCost Float    @default(0)
   customsOrTaxes   Float    @default(0)
+  totalItemsCost   Float    @default(0)
+  totalLandedCost  Float    @default(0)
+  paidFromAccountId String?
+  paidAmount       Float    @default(0)
+  payableAmount    Float    @default(0)
+  payableId        String?
+  paymentStatus    String   @default("PAID") // PAID, PARTIALLY_PAID, PAYABLE_UNPAID
   notes            String?  @db.Text
   items            Json     @default("[]")
   createdAt        DateTime @default(now())
@@ -221,6 +230,8 @@ model CashTransaction {
   fromAccountId String?
   toAccountId   String?
   category      String            // SALES, SUPPLIER_PAYMENT, EXPENSE, CAPITAL_INJECTION, DRAWINGS, LOAN_DISBURSEMENT, LOAN_REPAYMENT, ASSET_PURCHASE, REFUND, INTERNAL_TRANSFER
+  partyName     String?           @default("") // Whom paid to / Whom received from
+  invoiceNumber String?           @default("")
   referenceId   String?           @default("")
   description   String?           @db.Text
   receiptUrl    String?           @default("")
@@ -234,6 +245,8 @@ model FixedAsset {
   assetName               String
   assetTag                String    @unique
   category                String    // COMPUTERS_IT, FURNITURE_FIXTURES, VEHICLES, MACHINERY_EQUIPMENT, LEASEHOLD_IMPROVEMENTS
+  vendorName              String?   @default("") // Whom purchased from
+  invoiceNumber           String?   @default("")
   purchaseDate            DateTime
   purchaseCost            Float
   salvageValue            Float     @default(0)
@@ -242,6 +255,10 @@ model FixedAsset {
   depreciationRate        Float     @default(25) // Annual % (e.g. 25 for IT, 20 for Vehicles)
   accumulatedDepreciation Float     @default(0)
   currentBookValue        Float
+  paidFromAccountId       String?
+  paidAmount              Float     @default(0)
+  payableAmount           Float     @default(0)
+  payableId               String?
   status                  String    @default("ACTIVE") // ACTIVE, DAMAGED, WRITTEN_OFF, SOLD, DISPOSED
   damageNotes             String?   @db.Text
   disposalDate            DateTime?
@@ -457,4 +474,101 @@ model AccountReceivable {
   collectionHistory Json      @default("[]") // [{ id, date, amount, toAccountId, accountName, transactionId, notes }]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+}
+
+model Account {
+  id               String        @id @default(uuid())
+  accountCode      String        @unique
+  accountName      String
+  accountType      String        // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  normalBalance    String        // DEBIT, CREDIT
+  parentAccountId  String?
+  parentAccount    Account?      @relation("AccountHierarchy", fields: [parentAccountId], references: [id], onDelete: SetNull)
+  subAccounts      Account[]     @relation("AccountHierarchy")
+  description      String?       @db.Text
+  isSystemAccount  Boolean       @default(false)
+  isActive         Boolean       @default(true)
+  currentBalance   Float         @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  journalLines     JournalLine[]
+
+  @@index([accountType])
+  @@index([parentAccountId])
+}
+
+model FiscalYear {
+  id        String             @id @default(uuid())
+  name      String             @unique // e.g. "2082/2083" or "2026/2027"
+  startDate DateTime
+  endDate   DateTime
+  status    String             @default("OPEN") // OPEN, CLOSED
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  periods   AccountingPeriod[]
+}
+
+model AccountingPeriod {
+  id           String     @id @default(uuid())
+  fiscalYearId String
+  fiscalYear   FiscalYear @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  periodName   String     // e.g. "2026-09"
+  startDate    DateTime
+  endDate      DateTime
+  status       String     @default("OPEN") // OPEN, CLOSED
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([fiscalYearId, periodName])
+}
+
+model JournalEntry {
+  id                 String        @id @default(uuid())
+  journalNumber      String        @unique // e.g. "JE-2026-00001"
+  transactionDate    DateTime      @default(now())
+  fiscalYearId       String?
+  accountingPeriodId String?
+  sourceType         String        // SALES_INVOICE, CUSTOMER_PAYMENT, PURCHASE_BILL, SUPPLIER_PAYMENT, SALES_RETURN, SUPPLIER_RETURN, EXPENSE_PAYMENT, ASSET_PURCHASE, ASSET_DEPRECIATION, LOAN_DISBURSEMENT, LOAN_REPAYMENT, CAPITAL_INJECTION, SHARE_BUYBACK, PROFIT_DISTRIBUTION, MANUAL_JOURNAL, PERIOD_CLOSING
+  sourceId           String?
+  idempotencyKey     String?       @unique // Unique index to prevent duplicate posting
+  referenceNumber    String?       @default("")
+  description        String        @db.Text
+  status             String        @default("POSTED") // DRAFT, POSTED, REVERSED, VOID
+  reversedEntryId    String?
+  reversalReason     String?       @db.Text
+  totalDebit         Float         @default(0)
+  totalCredit        Float         @default(0)
+  createdBy          String?       @default("system")
+  postedAt           DateTime      @default(now())
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  lines              JournalLine[]
+
+  @@index([transactionDate])
+  @@index([sourceType, sourceId])
+  @@index([status])
+}
+
+model JournalLine {
+  id             String       @id @default(uuid())
+  journalEntryId String
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  debit          Float        @default(0)
+  credit         Float        @default(0)
+  description    String?      @db.Text
+  customerId     String?
+  customerName   String?      @default("")
+  supplierId     String?
+  supplierName   String?      @default("")
+  productId      String?
+  assetId        String?
+  costCenter     String?      @default("")
+  createdAt      DateTime     @default(now())
+
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@index([customerId])
+  @@index([supplierId])
 }

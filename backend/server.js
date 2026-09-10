@@ -18,12 +18,15 @@ import offerRouter from "./routes/offerRoute.js";
 import cogsRouter from "./routes/cogsRoute.js";
 import financialRouter from "./routes/financialRoute.js";
 import returnsRouter from "./routes/returnsRoute.js";
+import accountingRouter from "./routes/accountingRoute.js";
+import { ensureStandardChartOfAccounts } from "./services/accountingPostingEngine.js";
 
 // App Config
 const app = express();
 const port = process.env.PORT || 4000;
 connectDB();
 connectCloudinary();
+ensureStandardChartOfAccounts();
 
 // Middleware
 app.use(express.json());
@@ -66,6 +69,7 @@ app.use("/api/offer", offerRouter);
 app.use("/api/cogs", cogsRouter);
 app.use("/api/finance", financialRouter);
 app.use("/api/returns", returnsRouter);
+app.use("/api/accounting", accountingRouter);
 
 app.get("/", (req, res) => {
   res.send("API Working");

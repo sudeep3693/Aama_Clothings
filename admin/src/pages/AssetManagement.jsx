@@ -18,12 +18,16 @@ const AssetManagement = ({ token }) => {
   const [newAsset, setNewAsset] = useState({
     assetName: "",
     category: "COMPUTERS_IT",
+    vendorName: "",
+    invoiceNumber: "",
     purchaseDate: new Date().toISOString().split("T")[0],
     purchaseCost: "",
     salvageValue: "0",
     depreciationRate: "25",
     depreciationMethod: "WRITTEN_DOWN_VALUE_SLAB",
     usefulLifeMonths: "60",
+    settlementType: "FULL_CASH",
+    paidAmount: "",
     paidFromAccountId: "",
   });
 
@@ -81,12 +85,16 @@ const AssetManagement = ({ token }) => {
         setNewAsset({
           assetName: "",
           category: "COMPUTERS_IT",
+          vendorName: "",
+          invoiceNumber: "",
           purchaseDate: new Date().toISOString().split("T")[0],
           purchaseCost: "",
           salvageValue: "0",
           depreciationRate: "25",
           depreciationMethod: "WRITTEN_DOWN_VALUE_SLAB",
           usefulLifeMonths: "60",
+          settlementType: "FULL_CASH",
+          paidAmount: "",
           paidFromAccountId: "",
         });
         fetchData();
@@ -320,103 +328,234 @@ const AssetManagement = ({ token }) => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateAsset} className="space-y-4 mt-4 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Asset Name *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. MacBook Pro M3 (Design Team)"
-                  value={newAsset.assetName}
-                  onChange={(e) => setNewAsset({ ...newAsset, assetName: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
-                  required
-                />
-              </div>
+            {(() => {
+              const cost = Number(newAsset.purchaseCost || 0);
+              const activeAcc = accounts.find((a) => a.id === newAsset.paidFromAccountId);
+              const requiredUpfront = newAsset.settlementType === "FULL_CASH"
+                ? cost
+                : newAsset.settlementType === "PARTIAL"
+                  ? Number(newAsset.paidAmount || 0)
+                  : 0;
+              const remainingPayable = Math.max(0, cost - requiredUpfront);
+              const isInsufficient = (newAsset.settlementType === "FULL_CASH" || newAsset.settlementType === "PARTIAL") && activeAcc && Number(activeAcc.currentBalance || 0) < requiredUpfront;
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Category &amp; IRD Tax Slab</label>
-                  <select
-                    value={newAsset.category}
-                    onChange={(e) => handleCategoryChange(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900 font-medium"
-                  >
-                    <option value="COMPUTERS_IT">Computers &amp; IT (Block B - 25%)</option>
-                    <option value="FURNITURE_FIXTURES">Furniture &amp; Store Racks (Block B - 25%)</option>
-                    <option value="VEHICLES">Delivery Bikes / Vehicles (Block C - 20%)</option>
-                    <option value="MACHINERY_EQUIPMENT">Packaging Machinery (Block D - 15%)</option>
-                    <option value="LEASEHOLD_IMPROVEMENTS">Interior Fitout (Block A - 5%)</option>
-                  </select>
-                </div>
+              return (
+                <form onSubmit={handleCreateAsset} className="space-y-4 mt-4 text-xs">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Asset Name *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. MacBook Pro M3 (Design Team)"
+                      value={newAsset.assetName}
+                      onChange={(e) => setNewAsset({ ...newAsset, assetName: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900 font-semibold"
+                      required
+                    />
+                  </div>
 
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Purchase Date</label>
-                  <input
-                    type="date"
-                    value={newAsset.purchaseDate}
-                    onChange={(e) => setNewAsset({ ...newAsset, purchaseDate: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
-                  />
-                </div>
-              </div>
+                  {/* Vendor / Purchased From & Invoice */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">
+                        Vendor / Purchased From <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Oliz Store Pvt Ltd"
+                        value={newAsset.vendorName}
+                        onChange={(e) => setNewAsset({ ...newAsset, vendorName: e.target.value })}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
+                        required
+                      />
+                    </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Purchase Cost ({currency}) *</label>
-                  <input
-                    type="number"
-                    placeholder="120000"
-                    value={newAsset.purchaseCost}
-                    onChange={(e) => setNewAsset({ ...newAsset, purchaseCost: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900 font-bold"
-                    required
-                  />
-                </div>
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">Vendor Invoice / Ref #</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. OLZ-9921"
+                        value={newAsset.invoiceNumber}
+                        onChange={(e) => setNewAsset({ ...newAsset, invoiceNumber: e.target.value })}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900 font-mono"
+                      />
+                    </div>
+                  </div>
 
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Annual Dep. Rate (%)</label>
-                  <input
-                    type="number"
-                    value={newAsset.depreciationRate}
-                    onChange={(e) => setNewAsset({ ...newAsset, depreciationRate: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">Category &amp; IRD Tax Slab</label>
+                      <select
+                        value={newAsset.category}
+                        onChange={(e) => handleCategoryChange(e.target.value)}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900 font-medium"
+                      >
+                        <option value="COMPUTERS_IT">Computers &amp; IT (Block B - 25%)</option>
+                        <option value="FURNITURE_FIXTURES">Furniture &amp; Store Racks (Block B - 25%)</option>
+                        <option value="VEHICLES">Delivery Bikes / Vehicles (Block C - 20%)</option>
+                        <option value="MACHINERY_EQUIPMENT">Packaging Machinery (Block D - 15%)</option>
+                        <option value="LEASEHOLD_IMPROVEMENTS">Interior Fitout (Block A - 5%)</option>
+                      </select>
+                    </div>
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Pay From Treasury Account (Optional)</label>
-                <select
-                  value={newAsset.paidFromAccountId}
-                  onChange={(e) => setNewAsset({ ...newAsset, paidFromAccountId: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
-                >
-                  <option value="">Do not deduct from liquid treasury</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.accountName} ({currency}{Number(a.currentBalance).toLocaleString()})
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-slate-400 mt-1">If selected, an outflow will be automatically logged in cash accounts.</p>
-              </div>
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">Purchase Date</label>
+                      <input
+                        type="date"
+                        value={newAsset.purchaseDate}
+                        onChange={(e) => setNewAsset({ ...newAsset, purchaseDate: e.target.value })}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
+                      />
+                    </div>
+                  </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800"
-                >
-                  Register Asset
-                </button>
-              </div>
-            </form>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">Purchase Cost ({currency}) *</label>
+                      <input
+                        type="number"
+                        placeholder="120000"
+                        value={newAsset.purchaseCost}
+                        onChange={(e) => setNewAsset({ ...newAsset, purchaseCost: e.target.value })}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900 font-bold"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">Annual Dep. Rate (%)</label>
+                      <input
+                        type="number"
+                        value={newAsset.depreciationRate}
+                        onChange={(e) => setNewAsset({ ...newAsset, depreciationRate: e.target.value })}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
+                      />
+                    </div>
+                  </div>
+
+                  {/* SETTLEMENT MODE */}
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                    <label className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider">
+                      Payment Settlement &amp; Solvency
+                    </label>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewAsset({ ...newAsset, settlementType: "FULL_CASH" })}
+                        className={`p-2 rounded-lg text-xs font-bold border text-center transition-all ${
+                          newAsset.settlementType === "FULL_CASH"
+                            ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        💵 100% Cash
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewAsset({ ...newAsset, settlementType: "PARTIAL" })}
+                        className={`p-2 rounded-lg text-xs font-bold border text-center transition-all ${
+                          newAsset.settlementType === "PARTIAL"
+                            ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        ⚖️ Partial Split
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewAsset({ ...newAsset, settlementType: "CREDIT_PAYABLE" })}
+                        className={`p-2 rounded-lg text-xs font-bold border text-center transition-all ${
+                          newAsset.settlementType === "CREDIT_PAYABLE"
+                            ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        📄 100% Credit
+                      </button>
+                    </div>
+
+                    {newAsset.settlementType !== "CREDIT_PAYABLE" && (
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Disbursement Account</label>
+                          <select
+                            value={newAsset.paidFromAccountId}
+                            onChange={(e) => setNewAsset({ ...newAsset, paidFromAccountId: e.target.value })}
+                            className="w-full p-2 bg-white border border-slate-200 rounded-xl outline-hidden focus:border-slate-900"
+                            required
+                          >
+                            <option value="">Select Treasury Account...</option>
+                            {accounts.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.accountName} ({currency}{Number(a.currentBalance).toLocaleString()})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {newAsset.settlementType === "PARTIAL" ? (
+                          <div>
+                            <label className="font-semibold text-slate-700 block mb-1">
+                              Paid Amount ({currency}) <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              max={cost || 999999999}
+                              placeholder="50000"
+                              value={newAsset.paidAmount}
+                              onChange={(e) => setNewAsset({ ...newAsset, paidAmount: e.target.value })}
+                              className="w-full p-2 bg-white border border-slate-200 rounded-xl outline-hidden focus:border-slate-900 font-mono"
+                              required
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex items-end pb-1">
+                            <span className="text-xs text-slate-500">
+                              Full amount will be deducted from chosen account.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {isInsufficient && (
+                      <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-[11px] text-rose-700 font-bold">
+                        ⚠️ Insufficient liquid funds! Available: {currency}{Number(activeAcc?.currentBalance || 0).toLocaleString()}, required: {currency}{requiredUpfront.toLocaleString()}.
+                      </div>
+                    )}
+
+                    <div className="p-2 bg-white border border-slate-200 rounded-lg text-[11px] space-y-0.5">
+                      <div className="flex justify-between font-bold text-slate-800">
+                        <span>Paid Now (Liquid Bank):</span>
+                        <span className="text-emerald-700 font-mono">{currency}{requiredUpfront.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-slate-800">
+                        <span>Accounts Payable to Vendor:</span>
+                        <span className="text-amber-700 font-mono">{currency}{remainingPayable.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddModal(false)}
+                      className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isInsufficient}
+                      className="px-4 py-2 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 disabled:opacity-50"
+                    >
+                      Register Asset
+                    </button>
+                  </div>
+                </form>
+              );
+            })()}
           </div>
         </div>
       )}
