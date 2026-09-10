@@ -1,5 +1,9 @@
 import { prisma } from "../config/db.js";
 import { calculateUserLoyalty } from "./loyaltyController.js";
+import {
+  postSalesOrderAccounting,
+  postCustomerPaymentAccounting,
+} from "../services/accountingPostingEngine.js";
 
 // global variables
 const deliveryCharge = 50;
@@ -159,7 +163,12 @@ const placeOrder = async (req, res) => {
       rewardApplied: rewardApplied ? JSON.stringify(rewardApplied) : "{}",
     };
 
-    await prisma.order.create({ data: orderData });
+    const createdOrder = await prisma.order.create({ data: orderData });
+
+    // Post to Double-Entry General Ledger (Sales Invoice / AR / Output VAT)
+    postSalesOrderAccounting(createdOrder).catch((glErr) => {
+      console.error("General Ledger sales order posting error:", glErr);
+    });
 
     // Update user cart and saved addresses
     try {
@@ -368,10 +377,16 @@ const cashReceived = async (req, res) => {
     if (order.status !== "Delivered") {
       return res.json({ success: false, message: "Order not delivered yet" });
     }
-    await prisma.order.update({
+    const updatedOrder = await prisma.order.update({
       where: { id: orderId },
       data: { payment: true },
     });
+
+    // Post Customer Payment to Double-Entry General Ledger (DR Liquid Cash, CR Accounts Receivable)
+    postCustomerPaymentAccounting(updatedOrder).catch((glErr) => {
+      console.error("General Ledger payment posting error:", glErr);
+    });
+
     res.json({ success: true, message: "Cash marked as received" });
   } catch (error) {
     console.log(error);
@@ -584,6 +599,17 @@ const adminCreateOrder = async (req, res) => {
         }),
       },
     });
+
+    // Post to Double-Entry General Ledger (Sales & optional Instant Payment)
+    postSalesOrderAccounting(newOrder).catch((glErr) => {
+      console.error("General Ledger admin sales order posting error:", glErr);
+    });
+
+    if (newOrder.payment) {
+      postCustomerPaymentAccounting(newOrder).catch((glErr) => {
+        console.error("General Ledger admin payment posting error:", glErr);
+      });
+    }
 
     // Deduct stock
     const productDeductions = {};

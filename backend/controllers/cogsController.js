@@ -1,4 +1,5 @@
 import { prisma } from "../config/db.js";
+import { postInboundShipmentAccounting } from "../services/accountingPostingEngine.js";
 
 // Helper to get current Year-Month string e.g. "2026-09"
 const getCurrentYearMonth = () => {
@@ -285,16 +286,23 @@ const getMonthlyExpenses = async (req, res) => {
   }
 };
 
-// Save / Upsert Inbound Transportation Batch
+// Save / Upsert Inbound Transportation Batch & Inventory Sourcing
 const saveInboundShipment = async (req, res) => {
   try {
     const {
       id,
       batchNumber,
+      supplierName,
+      invoiceNumber,
       carrier,
       shipmentDate,
       totalFreightCost,
       customsOrTaxes,
+      totalItemsCost,
+      settlementType = "CREDIT_PAYABLE", // FULL_CASH, CREDIT_PAYABLE, PARTIAL
+      paidFromAccountId,
+      upfrontPaidAmount,
+      dueDate,
       notes,
       items,
     } = req.body;
@@ -313,11 +321,65 @@ const saveInboundShipment = async (req, res) => {
       }
     }
 
-    // Calculate total quantity of items in batch
+    // Calculate total quantity of items in batch and items base cost
+    let calculatedItemsCost = Number(totalItemsCost || 0);
     const totalBatchUnits = parsedItems.reduce(
       (acc, item) => acc + (Number(item.quantity) || 0),
       0
     );
+
+    if (calculatedItemsCost === 0) {
+      for (const item of parsedItems) {
+        const qty = Number(item.quantity || 1);
+        const itemCost = Number(item.costPrice || item.unitCostPrice || item.unitPurchaseCost || 0);
+        calculatedItemsCost += itemCost * qty;
+      }
+    }
+    calculatedItemsCost = Number(calculatedItemsCost.toFixed(2));
+
+    const totalLandedCost = Number((totalBatchTransport + calculatedItemsCost).toFixed(2));
+    const finalSupplierName = (supplierName && supplierName.trim()) || (carrier && carrier.trim()) || "Supplier / Carrier";
+
+    // Determine Settlement Breakdown (Cash vs Payable)
+    let paidAmount = 0;
+    let payableAmount = 0;
+    let paymentStatus = "PAYABLE_UNPAID";
+
+    if (settlementType === "FULL_CASH") {
+      paidAmount = totalLandedCost;
+      payableAmount = 0;
+      paymentStatus = "PAID";
+    } else if (settlementType === "PARTIAL") {
+      paidAmount = Math.min(totalLandedCost, Math.max(0, Number(upfrontPaidAmount || 0)));
+      payableAmount = Number((totalLandedCost - paidAmount).toFixed(2));
+      paymentStatus = payableAmount === 0 ? "PAID" : "PARTIALLY_PAID";
+    } else {
+      // CREDIT_PAYABLE
+      paidAmount = 0;
+      payableAmount = totalLandedCost;
+      paymentStatus = "PAYABLE_UNPAID";
+    }
+
+    // Capital Solvency Verification for any upfront cash payment
+    let payingAccount = null;
+    if (paidAmount > 0) {
+      if (!paidFromAccountId) {
+        return res.json({
+          success: false,
+          message: "Please select a Treasury / Bank account to disburse the upfront cash payment.",
+        });
+      }
+      payingAccount = await prisma.financialAccount.findUnique({ where: { id: paidFromAccountId } });
+      if (!payingAccount) {
+        return res.json({ success: false, message: "Selected payment account not found" });
+      }
+      if (payingAccount.currentBalance < paidAmount) {
+        return res.json({
+          success: false,
+          message: `Capital Solvency Constraint: Cannot pay Rs ${paidAmount.toLocaleString()} from ${payingAccount.accountName}. Available liquid balance is Rs ${payingAccount.currentBalance.toLocaleString()} (Shortfall: Rs ${(paidAmount - payingAccount.currentBalance).toLocaleString()}). You can record this shipment on full credit (Accounts Payable) or lower the upfront payment amount.`,
+        });
+      }
+    }
 
     // Distribute freight evenly or by custom allocation
     const processedItems = parsedItems.map((item) => {
@@ -344,37 +406,108 @@ const saveInboundShipment = async (req, res) => {
         : `BATCH-${Date.now().toString().slice(-6)}`;
 
     let savedRecord;
+    let payableRecord = null;
+
+    // 1. Create or Update InboundShipment
+    const shipmentData = {
+      batchNumber: generatedBatchNumber,
+      supplierName: finalSupplierName,
+      invoiceNumber: invoiceNumber ? invoiceNumber.trim() : "",
+      carrier: carrier || "Local Freight",
+      shipmentDate: parsedDate,
+      totalFreightCost: freight,
+      customsOrTaxes: taxes,
+      totalItemsCost: calculatedItemsCost,
+      totalLandedCost,
+      paidFromAccountId: paidAmount > 0 ? paidFromAccountId : null,
+      paidAmount,
+      payableAmount,
+      paymentStatus,
+      notes: notes || null,
+      items: processedItems,
+    };
+
     if (id) {
       savedRecord = await prisma.inboundShipment.update({
         where: { id },
-        data: {
-          batchNumber: generatedBatchNumber,
-          carrier: carrier || "Local Freight",
-          shipmentDate: parsedDate,
-          totalFreightCost: freight,
-          customsOrTaxes: taxes,
-          notes: notes || null,
-          items: processedItems,
-        },
+        data: shipmentData,
       });
     } else {
       savedRecord = await prisma.inboundShipment.create({
-        data: {
-          batchNumber: generatedBatchNumber,
-          carrier: carrier || "Local Freight",
-          shipmentDate: parsedDate,
-          totalFreightCost: freight,
-          customsOrTaxes: taxes,
-          notes: notes || null,
-          items: processedItems,
-        },
+        data: shipmentData,
       });
     }
 
+    // 2. If upfront cash was paid, atomically deduct from treasury & record CashTransaction
+    if (paidAmount > 0 && payingAccount) {
+      await prisma.$transaction([
+        prisma.financialAccount.update({
+          where: { id: paidFromAccountId },
+          data: { currentBalance: { decrement: paidAmount } },
+        }),
+        prisma.cashTransaction.create({
+          data: {
+            amount: paidAmount,
+            type: "OUTFLOW",
+            fromAccountId: paidFromAccountId,
+            category: "SUPPLIER_PAYMENT",
+            partyName: finalSupplierName,
+            invoiceNumber: invoiceNumber || "",
+            referenceId: savedRecord.id,
+            description: `Upfront Payment for Inbound Batch ${generatedBatchNumber} to ${finalSupplierName}`,
+          },
+        }),
+      ]);
+    }
+
+    // 3. If credit portion exists, create/link an AccountPayable record
+    if (payableAmount > 0) {
+      payableRecord = await prisma.accountPayable.create({
+        data: {
+          title: `Inbound Purchase Batch ${generatedBatchNumber} (${finalSupplierName})`,
+          payeeName: finalSupplierName,
+          category: "SUPPLIER_INVOICE",
+          referenceType: "INBOUND_SHIPMENT",
+          referenceId: savedRecord.id,
+          totalAmount: payableAmount,
+          paidAmount: 0,
+          remainingBalance: payableAmount,
+          dueDate: dueDate ? new Date(dueDate) : null,
+          invoiceNumber: invoiceNumber || "",
+          priority: "HIGH",
+          status: "UNPAID",
+          notes: `Supplier invoice payable for Inbound Batch ${generatedBatchNumber}. Total batch cost Rs ${totalLandedCost.toLocaleString()}, upfront paid Rs ${paidAmount.toLocaleString()}, unpaid balance Rs ${payableAmount.toLocaleString()}.`,
+        },
+      });
+
+      // Update shipment with payable ID
+      savedRecord = await prisma.inboundShipment.update({
+        where: { id: savedRecord.id },
+        data: { payableId: payableRecord.id },
+      });
+    }
+
+    // 4. Post to Double-Entry General Ledger (Inventory / Input VAT / Bank & Accounts Payable split)
+    postInboundShipmentAccounting({
+      ...savedRecord,
+      paidAmount,
+      payableAmount,
+      supplierName: finalSupplierName,
+      totalItemsCost: calculatedItemsCost,
+    }).catch((glErr) => {
+      console.error("General Ledger inbound shipment posting error:", glErr);
+    });
+
     res.json({
       success: true,
-      message: "Inbound shipment recorded successfully",
+      message:
+        paidAmount > 0 && payableAmount > 0
+          ? `Inbound shipment recorded: Rs ${paidAmount.toLocaleString()} paid upfront from ${payingAccount?.accountName || "treasury"} and Rs ${payableAmount.toLocaleString()} registered under Accounts Payable to ${finalSupplierName}.`
+          : paidAmount > 0
+          ? `Inbound shipment fully paid (Rs ${paidAmount.toLocaleString()}) from ${payingAccount?.accountName || "treasury"}.`
+          : `Inbound shipment registered under Accounts Payable (Rs ${payableAmount.toLocaleString()}) to ${finalSupplierName}.`,
       shipment: savedRecord,
+      payable: payableRecord,
     });
   } catch (error) {
     console.error("Save Inbound Shipment Error:", error);

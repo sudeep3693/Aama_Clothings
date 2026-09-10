@@ -163,10 +163,19 @@ model StockLog {
 model InboundShipment {
   id               String   @id @default(uuid())
   batchNumber      String   @unique
+  supplierName     String   @default("") // Whom purchased from
+  invoiceNumber    String?  @default("")
   carrier          String   @default("Local Freight")
   shipmentDate     DateTime
   totalFreightCost Float    @default(0)
   customsOrTaxes   Float    @default(0)
+  totalItemsCost   Float    @default(0)
+  totalLandedCost  Float    @default(0)
+  paidFromAccountId String?
+  paidAmount       Float    @default(0)
+  payableAmount    Float    @default(0)
+  payableId        String?
+  paymentStatus    String   @default("PAID") // PAID, PARTIALLY_PAID, PAYABLE_UNPAID
   notes            String?  @db.Text
   items            Json     @default("[]")
   createdAt        DateTime @default(now())
@@ -221,6 +230,8 @@ model CashTransaction {
   fromAccountId String?
   toAccountId   String?
   category      String            // SALES, SUPPLIER_PAYMENT, EXPENSE, CAPITAL_INJECTION, DRAWINGS, LOAN_DISBURSEMENT, LOAN_REPAYMENT, ASSET_PURCHASE, REFUND, INTERNAL_TRANSFER
+  partyName     String?           @default("") // Whom paid to / Whom received from
+  invoiceNumber String?           @default("")
   referenceId   String?           @default("")
   description   String?           @db.Text
   receiptUrl    String?           @default("")
@@ -234,6 +245,8 @@ model FixedAsset {
   assetName               String
   assetTag                String    @unique
   category                String    // COMPUTERS_IT, FURNITURE_FIXTURES, VEHICLES, MACHINERY_EQUIPMENT, LEASEHOLD_IMPROVEMENTS
+  vendorName              String?   @default("") // Whom purchased from
+  invoiceNumber           String?   @default("")
   purchaseDate            DateTime
   purchaseCost            Float
   salvageValue            Float     @default(0)
@@ -242,6 +255,10 @@ model FixedAsset {
   depreciationRate        Float     @default(25) // Annual % (e.g. 25 for IT, 20 for Vehicles)
   accumulatedDepreciation Float     @default(0)
   currentBookValue        Float
+  paidFromAccountId       String?
+  paidAmount              Float     @default(0)
+  payableAmount           Float     @default(0)
+  payableId               String?
   status                  String    @default("ACTIVE") // ACTIVE, DAMAGED, WRITTEN_OFF, SOLD, DISPOSED
   damageNotes             String?   @db.Text
   disposalDate            DateTime?
@@ -256,15 +273,57 @@ model PartnerEquity {
   partnerName                String
   email                      String   @unique
   phone                      String?  @default("")
-  ownershipPercentage        Float    // e.g. 50.0
+  role                       String   @default("PARTNER") // FOUNDER, CO_FOUNDER, ANGEL_INVESTOR, INSTITUTIONAL_INVESTOR, PARTNER
+  shareCount                 Float    @default(0) // Number of shares held
+  sharePrice                 Float    @default(100) // Price per share at issuance / acquisition
+  ownershipPercentage        Float    // e.g. 50.0 (Strictly normalized in cap table)
   initialCapital             Float    @default(0)
   currentCapital             Float    @default(0)
   totalDrawings              Float    @default(0)
   totalDistributionsReceived Float    @default(0)
-  status                     String   @default("ACTIVE") // ACTIVE, INACTIVE
+  isPrimaryPartner           Boolean  @default(false)
+  investmentHistory          Json     @default("[]") // [{ date, roundName, shares, amount, type }]
+  status                     String   @default("ACTIVE") // ACTIVE, INACTIVE, EXITED
   notes                      String?  @db.Text
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
+}
+
+model CompanyValuation {
+  id                  String   @id @default(uuid())
+  roundName           String   // e.g. "Incorporation / Founder Round", "Seed Round", "Series A"
+  effectiveDate       DateTime @default(now())
+  preMoneyValuation   Float    @default(0)
+  investmentAmount    Float    @default(0)
+  postMoneyValuation  Float    @default(0)
+  totalPreShares      Float    @default(0)
+  newSharesIssued     Float    @default(0)
+  totalPostShares     Float    @default(0)
+  sharePrice          Float    @default(100)
+  valuationMethod     String   @default("EQUITY_ROUND") // EQUITY_ROUND, DCF, MULTIPLE, BOOK_VALUE, MANUAL_REVALUATION
+  leadInvestor        String?  @default("")
+  notes               String?  @db.Text
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model ShareTransaction {
+  id                          String   @id @default(uuid())
+  transactionType             String   // PRIMARY_ISSUANCE, SECONDARY_TRANSFER, SHARE_BUYBACK, FOUNDER_ALLOCATION, DILUTION_REBALANCE
+  fromPartnerId               String?  // null if PRIMARY_ISSUANCE or FOUNDER_ALLOCATION
+  fromPartnerName             String?  @default("")
+  toPartnerId                 String?  // null if SHARE_BUYBACK
+  toPartnerName               String?  @default("")
+  shareCount                  Float
+  sharePrice                  Float    @default(100)
+  totalAmount                 Float    @default(0)
+  equityPercentageTransferred Float    @default(0)
+  depositAccountId            String?  // Treasury account if money flowed into/out of company
+  settlementType              String   @default("COMPANY_TREASURY") // COMPANY_TREASURY, PRIVATE_PEER_TO_PEER
+  valuationRoundId            String?  @default("")
+  date                        DateTime @default(now())
+  notes                       String?  @db.Text
+  createdAt                   DateTime @default(now())
 }
 
 model ProfitDistribution {
@@ -290,12 +349,19 @@ model InvestorLiability {
   contactPhone            String?   @default("")
   contactEmail            String?   @default("")
   type                    String    // EQUITY_INVESTOR, LONG_TERM_LOAN, SHORT_TERM_BORROWING, CREDIT_LINE
+  loanType                String?   @default("TERM_LOAN") // TERM_LOAN, WORKING_CAPITAL, REVOLVING_CREDIT, PROMISSORY_NOTE
   principalAmount         Float
-  amountRepaid            Float     @default(0)
-  outstandingBalance      Float
-  interestRate            Float     @default(0) // Annual %
-  monthlyInstallment      Float?    @default(0)
+  principalPaid           Float     @default(0)
+  interestPaid            Float     @default(0)
+  totalInterestPayable    Float     @default(0)
+  amountRepaid            Float     @default(0) // principalPaid + interestPaid
+  outstandingBalance      Float     // remaining principal balance
+  interestRate            Float     @default(0) // Annual % APR
+  loanTermMonths          Int?      @default(12) // Duration in months
+  monthlyInstallment      Float?    @default(0) // Amortized EMI amount
   equityGrantedPercentage Float?    @default(0) // If equity investor
+  disbursementAccountId   String?   @default("")
+  loanSchedule            Json      @default("[]") // [{ monthNumber, dueDate, emi, principalPortion, interestPortion, remainingPrincipal, status }]
   startDate               DateTime
   maturityDate            DateTime?
   status                  String    @default("ACTIVE") // ACTIVE, SETTLED, DEFAULTED
@@ -408,4 +474,101 @@ model AccountReceivable {
   collectionHistory Json      @default("[]") // [{ id, date, amount, toAccountId, accountName, transactionId, notes }]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+}
+
+model Account {
+  id               String        @id @default(uuid())
+  accountCode      String        @unique
+  accountName      String
+  accountType      String        // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  normalBalance    String        // DEBIT, CREDIT
+  parentAccountId  String?
+  parentAccount    Account?      @relation("AccountHierarchy", fields: [parentAccountId], references: [id], onDelete: SetNull)
+  subAccounts      Account[]     @relation("AccountHierarchy")
+  description      String?       @db.Text
+  isSystemAccount  Boolean       @default(false)
+  isActive         Boolean       @default(true)
+  currentBalance   Float         @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  journalLines     JournalLine[]
+
+  @@index([accountType])
+  @@index([parentAccountId])
+}
+
+model FiscalYear {
+  id        String             @id @default(uuid())
+  name      String             @unique // e.g. "2082/2083" or "2026/2027"
+  startDate DateTime
+  endDate   DateTime
+  status    String             @default("OPEN") // OPEN, CLOSED
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  periods   AccountingPeriod[]
+}
+
+model AccountingPeriod {
+  id           String     @id @default(uuid())
+  fiscalYearId String
+  fiscalYear   FiscalYear @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  periodName   String     // e.g. "2026-09"
+  startDate    DateTime
+  endDate      DateTime
+  status       String     @default("OPEN") // OPEN, CLOSED
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([fiscalYearId, periodName])
+}
+
+model JournalEntry {
+  id                 String        @id @default(uuid())
+  journalNumber      String        @unique // e.g. "JE-2026-00001"
+  transactionDate    DateTime      @default(now())
+  fiscalYearId       String?
+  accountingPeriodId String?
+  sourceType         String        // SALES_INVOICE, CUSTOMER_PAYMENT, PURCHASE_BILL, SUPPLIER_PAYMENT, SALES_RETURN, SUPPLIER_RETURN, EXPENSE_PAYMENT, ASSET_PURCHASE, ASSET_DEPRECIATION, LOAN_DISBURSEMENT, LOAN_REPAYMENT, CAPITAL_INJECTION, SHARE_BUYBACK, PROFIT_DISTRIBUTION, MANUAL_JOURNAL, PERIOD_CLOSING
+  sourceId           String?
+  idempotencyKey     String?       @unique // Unique index to prevent duplicate posting
+  referenceNumber    String?       @default("")
+  description        String        @db.Text
+  status             String        @default("POSTED") // DRAFT, POSTED, REVERSED, VOID
+  reversedEntryId    String?
+  reversalReason     String?       @db.Text
+  totalDebit         Float         @default(0)
+  totalCredit        Float         @default(0)
+  createdBy          String?       @default("system")
+  postedAt           DateTime      @default(now())
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  lines              JournalLine[]
+
+  @@index([transactionDate])
+  @@index([sourceType, sourceId])
+  @@index([status])
+}
+
+model JournalLine {
+  id             String       @id @default(uuid())
+  journalEntryId String
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  debit          Float        @default(0)
+  credit         Float        @default(0)
+  description    String?      @db.Text
+  customerId     String?
+  customerName   String?      @default("")
+  supplierId     String?
+  supplierName   String?      @default("")
+  productId      String?
+  assetId        String?
+  costCenter     String?      @default("")
+  createdAt      DateTime     @default(now())
+
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@index([customerId])
+  @@index([supplierId])
 }

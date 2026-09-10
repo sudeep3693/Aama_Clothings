@@ -24,6 +24,10 @@ import TaxCompliance from "./pages/TaxCompliance";
 import ReturnsManagement from "./pages/ReturnsManagement";
 import FinancialStatements from "./pages/FinancialStatements";
 import PayablesReceivables from "./pages/PayablesReceivables";
+import ChartOfAccounts from "./pages/ChartOfAccounts";
+import JournalEntries from "./pages/JournalEntries";
+import GeneralLedger from "./pages/GeneralLedger";
+import TrialBalance from "./pages/TrialBalance";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -64,6 +68,10 @@ const App = () => {
                   <Route path="/returns" element={<ReturnsManagement token={token} />} />
                   <Route path="/payables" element={<PayablesReceivables token={token} />} />
                   <Route path="/statements" element={<FinancialStatements token={token} />} />
+                  <Route path="/chart-of-accounts" element={<ChartOfAccounts token={token} />} />
+                  <Route path="/journal-entries" element={<JournalEntries token={token} />} />
+                  <Route path="/general-ledger" element={<GeneralLedger token={token} />} />
+                  <Route path="/trial-balance" element={<TrialBalance token={token} />} />
                   <Route path="/add" element={<Add token={token} />} />
                   <Route path="/list" element={<List token={token} />} />
                   <Route path="/inventory" element={<Inventory token={token} />} />

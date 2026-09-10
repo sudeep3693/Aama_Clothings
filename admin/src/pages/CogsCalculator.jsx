@@ -28,10 +28,16 @@ const CogsCalculator = ({ token }) => {
   // Shipment Batch Modal State
   const [showShipmentModal, setShowShipmentModal] = useState(false);
   const [batchNumber, setBatchNumber] = useState("");
+  const [supplierName, setSupplierName] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [carrier, setCarrier] = useState("Local Freight");
   const [shipmentDate, setShipmentDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [totalFreightCost, setTotalFreightCost] = useState("");
   const [customsOrTaxes, setCustomsOrTaxes] = useState("");
+  const [settlementType, setSettlementType] = useState("CREDIT_PAYABLE"); // 'FULL_CASH' | 'CREDIT_PAYABLE' | 'PARTIAL'
+  const [paidFromAccountId, setPaidFromAccountId] = useState("");
+  const [paidAmount, setPaidAmount] = useState("");
+  const [accounts, setAccounts] = useState([]);
   const [shipmentNotes, setShipmentNotes] = useState("");
   const [shipmentItems, setShipmentItems] = useState([]); // [{ productId, productName, quantity, unitFreightCost }]
   const [selectedProductToAdd, setSelectedProductToAdd] = useState("");
@@ -127,11 +133,28 @@ const CogsCalculator = ({ token }) => {
     }
   };
 
+  const fetchAccounts = async () => {
+    try {
+      const res = await axios.get(`${backendUrl}/api/finance/treasury-accounts`, {
+        headers: { token },
+      });
+      if (res.data.success) {
+        setAccounts(res.data.accounts || []);
+        if (res.data.accounts?.length > 0 && !paidFromAccountId) {
+          setPaidFromAccountId(res.data.accounts[0].id);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     if (token) {
       fetchOverview(selectedMonth);
       fetchShipments();
       fetchMonthlyExpenses();
+      fetchAccounts();
     }
   }, [token, selectedMonth]);
 
@@ -226,10 +249,15 @@ const CogsCalculator = ({ token }) => {
     try {
       const payload = {
         batchNumber,
+        supplierName,
+        invoiceNumber,
         carrier,
         shipmentDate,
         totalFreightCost: Number(totalFreightCost || 0),
         customsOrTaxes: Number(customsOrTaxes || 0),
+        settlementType,
+        paidFromAccountId: settlementType !== "CREDIT_PAYABLE" ? paidFromAccountId : null,
+        paidAmount: settlementType === "PARTIAL" ? Number(paidAmount || 0) : null,
         notes: shipmentNotes,
         items: shipmentItems,
       };
@@ -239,20 +267,25 @@ const CogsCalculator = ({ token }) => {
       });
 
       if (res.data.success) {
-        toast.success("Inbound shipment recorded & freight allocated");
+        toast.success(res.data.message || "Inbound shipment recorded & freight allocated");
         setShowShipmentModal(false);
         setBatchNumber("");
+        setSupplierName("");
+        setInvoiceNumber("");
         setTotalFreightCost("");
         setCustomsOrTaxes("");
+        setPaidAmount("");
+        setSettlementType("CREDIT_PAYABLE");
         setShipmentNotes("");
         setShipmentItems([]);
         fetchShipments();
         fetchOverview(selectedMonth);
+        fetchAccounts();
       } else {
         toast.error(res.data.message);
       }
     } catch (err) {
-      toast.error("Failed to record shipment");
+      toast.error(err.response?.data?.message || "Failed to record shipment");
     } finally {
       setIsSavingShipment(false);
     }
@@ -1171,152 +1204,331 @@ const CogsCalculator = ({ token }) => {
               </button>
             </div>
 
-            <form onSubmit={handleSaveShipmentSubmit} className="space-y-4 text-sm">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Batch / Invoice #</label>
-                  <input
-                    type="text"
-                    value={batchNumber}
-                    onChange={(e) => setBatchNumber(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg text-xs font-mono"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Shipment Arrival Date</label>
-                  <input
-                    type="date"
-                    value={shipmentDate}
-                    onChange={(e) => setShipmentDate(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg text-xs"
-                    required
-                  />
-                </div>
-              </div>
+            {/* Inbound Shipment Form */}
+            {(() => {
+              const itemsCost = shipmentItems.reduce((acc, it) => {
+                const prod = overviewData?.products?.find((p) => p.id === it.productId);
+                const cost = prod ? Number(prod.costPrice || 0) : 0;
+                return acc + cost * Number(it.quantity || 0);
+              }, 0);
+              const landedCost = Number(totalFreightCost || 0) + Number(customsOrTaxes || 0);
+              const totalInboundValue = itemsCost + landedCost;
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Carrier / Transporter</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Kathmandu Courier"
-                    value={carrier}
-                    onChange={(e) => setCarrier(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Total Freight Cost ({currency})</label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={totalFreightCost}
-                    onChange={(e) => setTotalFreightCost(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg text-xs font-mono"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Customs / Toll ({currency})</label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={customsOrTaxes}
-                    onChange={(e) => setCustomsOrTaxes(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg text-xs font-mono"
-                  />
-                </div>
-              </div>
+              const activeAccount = accounts.find((a) => a.id === paidFromAccountId);
+              const requiredUpfront = settlementType === "FULL_CASH" 
+                ? totalInboundValue 
+                : settlementType === "PARTIAL" 
+                  ? Number(paidAmount || 0) 
+                  : 0;
+              const remainingPayable = Math.max(0, totalInboundValue - requiredUpfront);
+              const isInsufficientFunds = (settlementType === "FULL_CASH" || settlementType === "PARTIAL") && activeAccount && Number(activeAccount.currentBalance || 0) < requiredUpfront;
 
-              {/* Products in Batch Selector */}
-              <div className="border border-gray-200 rounded-xl p-3 bg-gray-50/50 space-y-3">
-                <span className="text-xs font-bold text-gray-800">Add Products in this Shipment</span>
-                <div className="flex gap-2">
-                  <select
-                    value={selectedProductToAdd}
-                    onChange={(e) => setSelectedProductToAdd(e.target.value)}
-                    className="flex-1 p-2 border border-gray-300 rounded-lg text-xs bg-white"
-                  >
-                    <option value="">Select a product...</option>
-                    {overviewData?.products?.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.categories?.join(", ") || "General"})
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="Qty"
-                    value={productAddQty}
-                    onChange={(e) => setProductAddQty(e.target.value)}
-                    className="w-20 p-2 border border-gray-300 rounded-lg text-xs font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddItemToShipment}
-                    className="px-3 py-2 bg-gray-900 hover:bg-black text-white rounded-lg text-xs font-semibold"
-                  >
-                    + Add
-                  </button>
-                </div>
-
-                {/* Items List */}
-                {shipmentItems.length > 0 && (
-                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                    {shipmentItems.map((it, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between bg-white p-2 rounded-lg border border-gray-200 text-xs"
-                      >
-                        <span className="font-semibold text-gray-800">{it.productName}</span>
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono text-gray-500">{it.quantity} units</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveShipmentItem(idx)}
-                            className="text-rose-600 hover:text-rose-800 font-bold"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+              return (
+                <form onSubmit={handleSaveShipmentSubmit} className="space-y-4 text-sm">
+                  {/* Supplier & Invoice */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-800 mb-1">
+                        Supplier / Purchased From <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Kathmandu Textile Mills Ltd"
+                        value={supplierName}
+                        onChange={(e) => setSupplierName(e.target.value)}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-xs font-semibold focus:border-gray-900"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Supplier Invoice / Ref #</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. KTM-INV-8890"
+                        value={invoiceNumber}
+                        onChange={(e) => setInvoiceNumber(e.target.value)}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-xs font-mono"
+                      />
+                    </div>
                   </div>
-                )}
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Notes (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Dashain festive shipment arrived via truck"
-                  value={shipmentNotes}
-                  onChange={(e) => setShipmentNotes(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-lg text-xs"
-                />
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Batch Identifier</label>
+                      <input
+                        type="text"
+                        value={batchNumber}
+                        onChange={(e) => setBatchNumber(e.target.value)}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-xs font-mono"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Shipment Arrival Date</label>
+                      <input
+                        type="date"
+                        value={shipmentDate}
+                        onChange={(e) => setShipmentDate(e.target.value)}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-xs"
+                        required
+                      />
+                    </div>
+                  </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => setShowShipmentModal(false)}
-                  className="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingShipment}
-                  className="px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm disabled:opacity-50"
-                >
-                  {isSavingShipment ? "Saving..." : "Record Shipment"}
-                </button>
-              </div>
-            </form>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Carrier / Transporter</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Local Cargo"
+                        value={carrier}
+                        onChange={(e) => setCarrier(e.target.value)}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Total Freight Cost ({currency})</label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={totalFreightCost}
+                        onChange={(e) => setTotalFreightCost(e.target.value)}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-xs font-mono"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Customs / Toll ({currency})</label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={customsOrTaxes}
+                        onChange={(e) => setCustomsOrTaxes(e.target.value)}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Products in Batch Selector */}
+                  <div className="border border-gray-200 rounded-xl p-3 bg-gray-50/50 space-y-3">
+                    <span className="text-xs font-bold text-gray-800">Add Products in this Shipment</span>
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedProductToAdd}
+                        onChange={(e) => setSelectedProductToAdd(e.target.value)}
+                        className="flex-1 p-2 border border-gray-300 rounded-lg text-xs bg-white"
+                      >
+                        <option value="">Select a product...</option>
+                        {overviewData?.products?.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} (Base Cost: {currency}{Number(p.costPrice || 0).toLocaleString()})
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Qty"
+                        value={productAddQty}
+                        onChange={(e) => setProductAddQty(e.target.value)}
+                        className="w-20 p-2 border border-gray-300 rounded-lg text-xs font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddItemToShipment}
+                        className="px-3 py-2 bg-gray-900 hover:bg-black text-white rounded-lg text-xs font-semibold"
+                      >
+                        + Add
+                      </button>
+                    </div>
+
+                    {/* Items List */}
+                    {shipmentItems.length > 0 && (
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                        {shipmentItems.map((it, idx) => {
+                          const prod = overviewData?.products?.find((p) => p.id === it.productId);
+                          const unitCost = prod ? Number(prod.costPrice || 0) : 0;
+                          const lineCost = unitCost * Number(it.quantity || 0);
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-gray-200 text-xs shadow-2xs"
+                            >
+                              <div>
+                                <span className="font-semibold text-gray-800">{it.productName}</span>
+                                <div className="text-[10px] text-gray-500">
+                                  {it.quantity} units × {currency}{unitCost.toLocaleString()} = {currency}{lineCost.toLocaleString()}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveShipmentItem(idx)}
+                                className="text-rose-600 hover:text-rose-800 font-bold p-1"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SETTLEMENT & CAPITAL SOLVENCY SECTION */}
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                        Payment &amp; Solvency Settlement
+                      </span>
+                      <span className="text-xs font-black text-slate-900 font-mono">
+                        Total Value: {currency}{totalInboundValue.toLocaleString()}
+                      </span>
+                    </div>
+
+                    {/* Settlement Type Selector */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSettlementType("CREDIT_PAYABLE")}
+                        className={`p-2 rounded-lg text-xs font-bold border text-center transition-all ${
+                          settlementType === "CREDIT_PAYABLE"
+                            ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        📄 100% Credit (Payable)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSettlementType("PARTIAL")}
+                        className={`p-2 rounded-lg text-xs font-bold border text-center transition-all ${
+                          settlementType === "PARTIAL"
+                            ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        ⚖️ Partial Payment Split
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSettlementType("FULL_CASH")}
+                        className={`p-2 rounded-lg text-xs font-bold border text-center transition-all ${
+                          settlementType === "FULL_CASH"
+                            ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        💵 100% Upfront Cash
+                      </button>
+                    </div>
+
+                    {/* Account and Amount inputs for Cash / Partial */}
+                    {settlementType !== "CREDIT_PAYABLE" && (
+                      <div className="grid grid-cols-2 gap-3 pt-2">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                            Disbursement Account (Liquid)
+                          </label>
+                          <select
+                            value={paidFromAccountId}
+                            onChange={(e) => setPaidFromAccountId(e.target.value)}
+                            className="w-full p-2 border border-slate-300 rounded-lg text-xs bg-white"
+                            required
+                          >
+                            <option value="">Select Treasury Account...</option>
+                            {accounts.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.accountName} ({currency}{Number(a.currentBalance || 0).toLocaleString()} available)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {settlementType === "PARTIAL" ? (
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                              Upfront Cash Amount ({currency}) <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              max={totalInboundValue || 999999999}
+                              placeholder="e.g. 100000"
+                              value={paidAmount}
+                              onChange={(e) => setPaidAmount(e.target.value)}
+                              className="w-full p-2 border border-slate-300 rounded-lg text-xs font-mono"
+                              required
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex items-end pb-1">
+                            <span className="text-xs text-slate-600">
+                              Full amount <strong className="text-slate-900">{currency}{totalInboundValue.toLocaleString()}</strong> will be disbursed immediately.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Solvency Warning or Split Breakdown */}
+                    {isInsufficientFunds && (
+                      <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 font-semibold flex items-center gap-2">
+                        <span>⚠️ Insufficient liquid funds in selected account! Available: {currency}{Number(activeAccount?.currentBalance || 0).toLocaleString()}, required: {currency}{requiredUpfront.toLocaleString()}. Please choose 100% Credit or reduce upfront payment.</span>
+                      </div>
+                    )}
+
+                    <div className="p-2.5 bg-white border border-slate-200 rounded-lg text-xs space-y-1">
+                      <div className="flex justify-between text-slate-600">
+                        <span>Inventory Items Cost:</span>
+                        <span className="font-mono font-bold">{currency}{itemsCost.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-600">
+                        <span>Freight &amp; Landed Costs:</span>
+                        <span className="font-mono font-bold">{currency}{landedCost.toLocaleString()}</span>
+                      </div>
+                      <div className="border-t border-slate-100 pt-1 flex justify-between font-bold text-slate-900">
+                        <span>Paid Upfront via Liquid Bank:</span>
+                        <span className="font-mono text-emerald-700">{currency}{requiredUpfront.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-slate-900">
+                        <span>Recorded as Accounts Payable to Supplier:</span>
+                        <span className="font-mono text-amber-700">{currency}{remainingPayable.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Notes (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Dashain festive shipment arrived via truck"
+                      value={shipmentNotes}
+                      onChange={(e) => setShipmentNotes(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => setShowShipmentModal(false)}
+                      className="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingShipment || isInsufficientFunds}
+                      className="px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm disabled:opacity-50"
+                    >
+                      {isSavingShipment ? "Saving..." : "Record Inbound Shipment"}
+                    </button>
+                  </div>
+                </form>
+              );
+            })()}
           </div>
         </div>
       )}
