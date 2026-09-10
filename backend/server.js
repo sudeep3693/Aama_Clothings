@@ -16,6 +16,8 @@ import loyaltyRouter from "./routes/loyaltyRoute.js";
 import customerRouter from "./routes/customerRoute.js";
 import offerRouter from "./routes/offerRoute.js";
 import cogsRouter from "./routes/cogsRoute.js";
+import financialRouter from "./routes/financialRoute.js";
+import returnsRouter from "./routes/returnsRoute.js";
 
 // App Config
 const app = express();
@@ -26,8 +28,21 @@ connectCloudinary();
 // Middleware
 app.use(express.json());
 
+// Build allowed origins from env vars (supports local dev + deployed Netlify URLs)
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  process.env.FRONTEND_URL,
+  process.env.ADMIN_URL,
+].filter(Boolean); // removes undefined/null if env vars not set
+
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'https://forever-fullstack-2-o-frontend.onrender.com', 'https://forever-fullstack-2-o-admin.onrender.com'], // local frontend and admin frontend origins
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. Postman, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: Origin ${origin} not allowed`));
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'token'],
   credentials: true,
@@ -49,9 +64,11 @@ app.use("/api/loyalty", loyaltyRouter);
 app.use("/api/customer", customerRouter);
 app.use("/api/offer", offerRouter);
 app.use("/api/cogs", cogsRouter);
+app.use("/api/finance", financialRouter);
+app.use("/api/returns", returnsRouter);
 
 app.get("/", (req, res) => {
   res.send("API Working");
 });
 
-app.listen(port, () => console.log("Server started on PORT : " + port));
+app.listen(port, () => console.log("Server started on PORT : " + port));

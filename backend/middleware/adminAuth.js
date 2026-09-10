@@ -10,13 +10,23 @@ const adminAuth = async (req, res, next) => {
       });
     }
     const token_decode = jwt.verify(token, process.env.JWT_SECRET);
-    if (token_decode !== process.env.ADMIN_EMAIL + process.env.ADMIN_PASSWORD) {
-      return res.json({
-        success: false,
-        message: "Not Authorized Login Again",
-      });
+    
+    // Support object token ({ role: 'admin', adminId }) or legacy env string
+    if (typeof token_decode === "object" && token_decode.role === "admin") {
+      if (!req.body) req.body = {};
+      req.body.adminId = token_decode.adminId;
+      req.adminId = token_decode.adminId;
+      return next();
     }
-    next();
+
+    if (token_decode === process.env.ADMIN_EMAIL + process.env.ADMIN_PASSWORD) {
+      return next();
+    }
+
+    return res.json({
+      success: false,
+      message: "Not Authorized Login Again",
+    });
   } catch (error) {
     console.log(error);
     res.json({ success: false, message: error.message });
@@ -24,3 +34,4 @@ const adminAuth = async (req, res, next) => {
 };
 
 export default adminAuth;
+
