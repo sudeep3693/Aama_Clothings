@@ -10,7 +10,20 @@ import Reviews from "./pages/Reviews";
 import ShippingSettings from "./pages/ShippingSettings";
 import Customers from "./pages/Customers";
 import LoyaltyLevels from "./pages/LoyaltyLevels";
+import CreateOrder from "./pages/CreateOrder";
+import SpecialOffers from "./pages/SpecialOffers";
+import Inventory from "./pages/Inventory";
+import CogsCalculator from "./pages/CogsCalculator";
 import Login from "./components/Login";
+import ChangePassword from "./pages/ChangePassword";
+import FinanceDashboard from "./pages/FinanceDashboard";
+import TreasuryCash from "./pages/TreasuryCash";
+import AssetManagement from "./pages/AssetManagement";
+import PartnershipEquity from "./pages/PartnershipEquity";
+import TaxCompliance from "./pages/TaxCompliance";
+import ReturnsManagement from "./pages/ReturnsManagement";
+import FinancialStatements from "./pages/FinancialStatements";
+import PayablesReceivables from "./pages/PayablesReceivables";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -38,26 +51,42 @@ const App = () => {
       ) : (
         <>
           <Navbar setToken={setToken} />
-          <hr />
-          <div className="flex w-full">
+          <div className="flex w-full min-h-[calc(100vh-65px)]">
             <Sidebar />
-            <div className="w-[70%] mx-auto ml-[max(5vw, 25px)] my-8 text-gray-600 text-base">
-              <Routes>
-                <Route path="/add" element={<Add token={token} />} />
-                <Route path="/list" element={<List token={token} />} />
-                <Route path="/orders" element={<Orders token={token} />} />
-                <Route path="/customers" element={<Customers token={token} />} />
-                <Route path="/loyalty-levels" element={<LoyaltyLevels token={token} />} />
-                <Route path="/categories" element={<Categories token={token} />} />
-                <Route path="/reviews" element={<Reviews token={token} />} />
-                <Route path="/shipping" element={<ShippingSettings token={token} />} />
-              </Routes>
-            </div>
+            <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-slate-50/60 overflow-x-hidden min-w-0">
+              <div className="max-w-7xl mx-auto">
+                <Routes>
+                  <Route path="/finance" element={<FinanceDashboard token={token} />} />
+                  <Route path="/treasury" element={<TreasuryCash token={token} />} />
+                  <Route path="/assets" element={<AssetManagement token={token} />} />
+                  <Route path="/partners" element={<PartnershipEquity token={token} />} />
+                  <Route path="/tax" element={<TaxCompliance token={token} />} />
+                  <Route path="/returns" element={<ReturnsManagement token={token} />} />
+                  <Route path="/payables" element={<PayablesReceivables token={token} />} />
+                  <Route path="/statements" element={<FinancialStatements token={token} />} />
+                  <Route path="/add" element={<Add token={token} />} />
+                  <Route path="/list" element={<List token={token} />} />
+                  <Route path="/inventory" element={<Inventory token={token} />} />
+                  <Route path="/cogs" element={<CogsCalculator token={token} />} />
+                  <Route path="/special-offers" element={<SpecialOffers token={token} />} />
+                  <Route path="/create-order" element={<CreateOrder token={token} />} />
+                  <Route path="/add-order" element={<CreateOrder token={token} />} />
+                  <Route path="/orders" element={<Orders token={token} />} />
+                  <Route path="/customers" element={<Customers token={token} />} />
+                  <Route path="/loyalty-levels" element={<LoyaltyLevels token={token} />} />
+                  <Route path="/categories" element={<Categories token={token} />} />
+                  <Route path="/reviews" element={<Reviews token={token} />} />
+                  <Route path="/shipping" element={<ShippingSettings token={token} />} />
+                  <Route path="/change-password" element={<ChangePassword token={token} />} />
+                </Routes>
+              </div>
+            </main>
           </div>
         </>
       )}
     </div>
   );
 };
+
 
 export default App;

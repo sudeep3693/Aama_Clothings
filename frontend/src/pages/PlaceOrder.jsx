@@ -142,7 +142,7 @@ const PlaceOrder = () => {
         isLoyaltyFreeShipping = true;
         fee = 0;
         setShippingTierLabel(
-          `🎁 Free Delivery · ${lvl.badgeIcon} ${lvl.name} (${usageText})`
+          `Free Delivery · ${lvl.name} (${usageText})`
         );
       }
 
@@ -152,9 +152,9 @@ const PlaceOrder = () => {
         const parts = [];
         if (act.freeShipping) parts.push("Free Delivery");
         parts.push(`Rs. ${discAmount} Off`);
-        discLabel = `${lvl.badgeIcon} ${lvl.name} · ${parts.join(" + ")} (${usageText})`;
+        discLabel = `${lvl.name} · ${parts.join(" + ")} (${usageText})`;
       } else if (act.freeShipping) {
-        discLabel = `${lvl.badgeIcon} ${lvl.name} · Free Delivery (${usageText})`;
+        discLabel = `${lvl.name} · Free Delivery (${usageText})`;
       }
 
       // Gift / Letter / Custom Perk
@@ -170,11 +170,11 @@ const PlaceOrder = () => {
 
     if (!isLoyaltyFreeShipping) {
       if (freeMin > 0 && subtotal >= freeMin) {
-        setShippingTierLabel("🎁 Free Delivery (Order above Rs. " + freeMin + ")");
+        setShippingTierLabel("Free Delivery (Order above Rs. " + freeMin + ")");
       } else if (isLocal) {
-        setShippingTierLabel(`🏠 Inside ${baseCity}`);
+        setShippingTierLabel(`Inside ${baseCity}`);
       } else {
-        setShippingTierLabel(`🚚 Outside ${baseCity}`);
+        setShippingTierLabel(`Outside ${baseCity}`);
       }
     }
 
@@ -619,16 +619,18 @@ const PlaceOrder = () => {
                       background: `linear-gradient(135deg, #1a1a2e 0%, ${loyaltyData.currentLevel?.color || "#F59E0B"} 100%)`,
                     }}
                   >
-                    <span className="text-xl">{loyaltyData.currentLevel?.badgeIcon || "⭐"}</span>
+                    <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold text-white">
+                      VIP
+                    </div>
                     <div className="flex-1">
-                      <p className="text-white font-black text-xs tracking-wide">
-                        🎁 VIP REWARD APPLIED — {loyaltyData.currentLevel?.name}
+                      <p className="text-white font-bold text-xs tracking-wide">
+                        VIP REWARD APPLIED — {loyaltyData.currentLevel?.name}
                       </p>
                       <p className="text-white/70 text-[11px]">
                         {loyaltyData.activeReward.title} · Use {loyaltyData.activeReward.currentUseIndex} of {loyaltyData.activeReward.orderLimit}
                       </p>
                     </div>
-                    <span className="text-[10px] font-extrabold bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-bold bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full">
                       ACTIVE
                     </span>
                   </div>
@@ -638,7 +640,7 @@ const PlaceOrder = () => {
                     {/* Free Delivery Perk */}
                     {loyaltyData.activeReward.freeShipping && (
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-sm flex-shrink-0">🚚</span>
+                        <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-[10px] font-bold flex-shrink-0">✓</span>
                         <div className="flex-1">
                           <span className="font-bold text-emerald-800">Free Delivery</span>
                           <span className="text-emerald-600 ml-1 font-semibold">— courier fee waived on this order</span>
@@ -650,7 +652,7 @@ const PlaceOrder = () => {
                     {/* Price Discount Perk */}
                     {Number(loyaltyData.activeReward.discountAmount) > 0 && (
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-sm flex-shrink-0">🏷️</span>
+                        <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-800 flex items-center justify-center text-[10px] font-bold flex-shrink-0">%</span>
                         <div className="flex-1">
                           <span className="font-bold text-rose-800">Price Discount</span>
                           <span className="text-rose-600 ml-1">— deducted from your total</span>
@@ -662,7 +664,7 @@ const PlaceOrder = () => {
                     {/* Gift Voucher / Item Perk */}
                     {(Number(loyaltyData.activeReward.giftAmount) > 0 || loyaltyData.activeReward.giftDescription) && (
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-sm flex-shrink-0">🎁</span>
+                        <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-800 flex items-center justify-center text-[10px] font-bold flex-shrink-0">+</span>
                         <div className="flex-1">
                           <span className="font-bold text-indigo-800">Special Gift Included</span>
                           {loyaltyData.activeReward.giftDescription && (
@@ -678,7 +680,7 @@ const PlaceOrder = () => {
                     {/* Handwritten Letter */}
                     {loyaltyData.activeReward.letterIncluded && (
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center text-sm flex-shrink-0">💌</span>
+                        <span className="w-5 h-5 rounded-full bg-violet-100 text-violet-800 flex items-center justify-center text-[10px] font-bold flex-shrink-0">✉</span>
                         <span className="font-bold text-violet-800">Handwritten Thank-You Letter</span>
                         <span className="text-violet-600 ml-auto text-[10px] font-semibold">Included</span>
                       </div>
@@ -687,7 +689,7 @@ const PlaceOrder = () => {
                     {/* Custom VIP Perk */}
                     {loyaltyData.activeReward.customPerk && (
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-sm flex-shrink-0">✨</span>
+                        <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-[10px] font-bold flex-shrink-0">★</span>
                         <span className="font-bold text-amber-800">{loyaltyData.activeReward.customPerk}</span>
                       </div>
                     )}

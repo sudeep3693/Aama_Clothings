@@ -69,6 +69,27 @@ const Product = () => {
         {/* --- Product Info --- */}
         <div className="flex-1">
           <h1 className="font-medium text-2xl mt-2">{productData.name}</h1>
+          {/* Category Badges */}
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            {(Array.isArray(productData.categories) && productData.categories.length > 0
+              ? productData.categories
+              : productData.category
+              ? [productData.category]
+              : []
+            ).map((cat, idx) => (
+              <span
+                key={idx}
+                className="text-[11px] font-semibold tracking-wide px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200"
+              >
+                {cat}
+              </span>
+            ))}
+            {productData.subCategory && (
+              <span className="text-[11px] font-semibold tracking-wide px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                {productData.subCategory}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1.5 mt-2">
             <div className="flex items-center gap-0.5">
               {renderTopStars(reviewStats.averageRating)}
@@ -261,7 +282,9 @@ const Product = () => {
       {/* --- Display related products --- */}
       <RelatedProducts
         category={productData.category}
+        categories={productData.categories}
         subCategory={productData.subCategory}
+        currentId={productData._id}
       />
     </div>
   ) : (

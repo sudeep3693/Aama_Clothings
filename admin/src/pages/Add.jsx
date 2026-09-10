@@ -15,10 +15,13 @@ const Add = ({ token }) => {
   const [name, setName] = useState("");
   const [description, setDesription] = useState("");
   const [price, setPrice] = useState("");
+  const [costPrice, setCostPrice] = useState("");
   const [discount, setDiscount] = useState("");
-  const [category, setCategory] = useState("Men");
+  const [lowStockThreshold, setLowStockThreshold] = useState("5");
+  const [selectedCategories, setSelectedCategories] = useState(["Men"]);
   const [subCategory, setSubCategory] = useState("Topwear");
   const [bestseller, setBestSeller] = useState(false);
+  const [newInStore, setNewInStore] = useState(false);
   const [variants, setVariants] = useState([]);
   const [variantSize, setVariantSize] = useState("S");
   const [variantColor, setVariantColor] = useState("");
@@ -27,7 +30,7 @@ const Add = ({ token }) => {
 
   const [customCategory, setCustomCategory] = useState("");
   const [customSubCategory, setCustomSubCategory] = useState("");
-  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
   const [isCustomSubCategory, setIsCustomSubCategory] = useState(false);
 
   const [categoriesList, setCategoriesList] = useState([]);
@@ -43,9 +46,7 @@ const Add = ({ token }) => {
       ]);
       if (catRes.data.success && catRes.data.categories.length > 0) {
         setCategoriesList(catRes.data.categories);
-        if (!isCustomCategory) {
-          setCategory(catRes.data.categories[0].name);
-        }
+        setSelectedCategories((prev) => (prev.length > 0 ? prev : [catRes.data.categories[0].name]));
       }
       if (subRes.data.success && subRes.data.subCategories.length > 0) {
         setSubCategoriesList(subRes.data.subCategories);
@@ -66,22 +67,57 @@ const Add = ({ token }) => {
     fetchOptions();
   }, []);
 
+  const toggleCategorySelection = (catName) => {
+    setSelectedCategories((prev) => {
+      if (prev.includes(catName)) {
+        if (prev.length === 1) {
+          toast.warning("Please keep at least 1 category selected.");
+          return prev;
+        }
+        return prev.filter((c) => c !== catName);
+      } else {
+        return [...prev, catName];
+      }
+    });
+  };
+
+  const handleAddNewCategoryInline = async (e) => {
+    e.preventDefault();
+    const trimmed = customCategory.trim();
+    if (!trimmed) return;
+
+    try {
+      const res = await axios.post(
+        backendUrl + "/api/category/add",
+        { name: trimmed },
+        { headers: { token } }
+      );
+      if (res.data.success) {
+        toast.success(`Category "${trimmed}" added!`);
+        setCategoriesList((prev) =>
+          prev.some((c) => c.name.toLowerCase() === trimmed.toLowerCase())
+            ? prev
+            : [...prev, { id: Date.now().toString(), name: trimmed }]
+        );
+        setSelectedCategories((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+        setCustomCategory("");
+        setIsAddingNewCategory(false);
+      } else {
+        toast.error(res.data.message || "Failed to add category");
+      }
+    } catch (err) {
+      toast.error(err.message || "Failed to add category");
+    }
+  };
+
   const onSubmitHandler = async (e) => {
     e.preventDefault();
-    try {
-      let finalCategory = category;
-      if (isCustomCategory && customCategory.trim()) {
-        finalCategory = customCategory.trim();
-        // Save new category to backend DB
-        await axios
-          .post(
-            backendUrl + "/api/category/add",
-            { name: finalCategory },
-            { headers: { token } }
-          )
-          .catch(() => {});
-      }
+    if (selectedCategories.length === 0) {
+      toast.error("Please select at least one category for the product.");
+      return;
+    }
 
+    try {
       let finalSubCategory = subCategory;
       if (isCustomSubCategory && customSubCategory.trim()) {
         finalSubCategory = customSubCategory.trim();
@@ -99,13 +135,16 @@ const Add = ({ token }) => {
       formData.append("name", name);
       formData.append("description", description);
       formData.append("price", price);
+      formData.append("costPrice", costPrice || 0);
       formData.append("discount", discount);
-      formData.append("category", finalCategory);
+      formData.append("category", JSON.stringify(selectedCategories));
       formData.append("subCategory", finalSubCategory);
       formData.append("bestseller", bestseller);
+      formData.append("newInStore", newInStore);
       
       const computedStockQuantity = variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0);
       formData.append("stockQuantity", computedStockQuantity);
+      formData.append("lowStockThreshold", lowStockThreshold || 5);
       
       const allSizes = [...new Set(variants.map(v => v.size))];
       const allColors = [...new Set(variants.map(v => v.color))];
@@ -134,14 +173,19 @@ const Add = ({ token }) => {
         setImage3(false);
         setImage4(false);
         setPrice("");
+        setCostPrice("");
         setDiscount("");
+        setLowStockThreshold("5");
+        setBestSeller(false);
+        setNewInStore(false);
         setVariants([]);
         setVariantSize("S");
         setVariantColor("");
+        setSelectedCategories(categoriesList.length > 0 ? [categoriesList[0].name] : ["Men"]);
         setVariantQty("");
         setCustomCategory("");
         setCustomSubCategory("");
-        setIsCustomCategory(false);
+        setIsAddingNewCategory(false);
         setIsCustomSubCategory(false);
         fetchOptions();
       } else {
@@ -238,42 +282,72 @@ const Add = ({ token }) => {
           required
         />
       </div>
-      <div className="flex flex-col sm:flex-row gap-2 w-full sm:gap-8">
-        <div>
-          <p className="mb-2">Product category</p>
-          <select
-            value={isCustomCategory ? "ADD_NEW" : category}
-            onChange={(e) => {
-              if (e.target.value === "ADD_NEW") {
-                setIsCustomCategory(true);
-              } else {
-                setIsCustomCategory(false);
-                setCategory(e.target.value);
-              }
-            }}
-            className="w-full px-3 py-2"
-          >
-            {categoriesList.map((item) => (
-              <option key={item.id} value={item.name}>
-                {item.name}
-              </option>
-            ))}
-            <option value="ADD_NEW">+ Add New Category...</option>
-          </select>
-          {isCustomCategory && (
-            <input
-              type="text"
-              placeholder="Type new category name"
-              value={customCategory}
-              onChange={(e) => setCustomCategory(e.target.value)}
-              className="mt-2 border px-3 py-1.5 w-full rounded text-sm"
-              required
-            />
+      <div className="flex flex-col gap-4 w-full max-w-[650px]">
+        {/* Multi-category Selector */}
+        <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="font-semibold text-gray-800 text-sm">
+              Product Categories (Select 1 or more)
+            </p>
+            <span className="text-xs text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full">
+              {selectedCategories.length} selected
+            </span>
+          </div>
+          <p className="text-xs text-gray-500">
+            A single product can belong to multiple categories simultaneously (e.g. Men &amp; Festival Offer).
+          </p>
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            {categoriesList.map((item) => {
+              const isSelected = selectedCategories.includes(item.name);
+              return (
+                <button
+                  key={item.id || item.name}
+                  type="button"
+                  onClick={() => toggleCategorySelection(item.name)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                    isSelected
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-xs scale-[1.02]"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                  }`}
+                >
+                  <span>{isSelected ? "✓" : "+"}</span>
+                  <span>{item.name}</span>
+                </button>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={() => setIsAddingNewCategory(!isAddingNewCategory)}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-dashed border-indigo-400 text-indigo-700 bg-indigo-50/50 hover:bg-indigo-50"
+            >
+              {isAddingNewCategory ? "✕ Cancel" : "+ Add New Category..."}
+            </button>
+          </div>
+
+          {isAddingNewCategory && (
+            <div className="mt-2 flex gap-2">
+              <input
+                type="text"
+                placeholder="Type new category name (e.g. Festival Offer)"
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value)}
+                className="border px-3 py-1.5 flex-1 rounded-lg text-xs focus:border-indigo-500 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleAddNewCategoryInline}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold"
+              >
+                Add Category
+              </button>
+            </div>
           )}
         </div>
 
         <div>
-          <p className="mb-2">Sub category (Type)</p>
+          <p className="mb-2 font-medium text-sm">Sub category (Type)</p>
           <select
             value={isCustomSubCategory ? "ADD_NEW" : subCategory}
             onChange={(e) => {
@@ -284,7 +358,7 @@ const Add = ({ token }) => {
                 setSubCategory(e.target.value);
               }
             }}
-            className="w-full px-3 py-2"
+            className="w-full max-w-[500px] px-3 py-2 border rounded-lg text-sm"
           >
             {subCategoriesList.map((item) => (
               <option key={item.id} value={item.name}>
@@ -305,28 +379,52 @@ const Add = ({ token }) => {
           )}
         </div>
 
-        <div>
-          <p className="mb-2">Product Price</p>
-          <input
-            onChange={(e) => setPrice(e.target.value)}
-            value={price}
-            className="w-full px-3 py-2 sm:w-[120px]"
-            type="Number"
-            placeholder="25"
-            required
-          />
-        </div>
-        <div>
-          <p className="mb-2">Discount (%)</p>
-          <input
-            onChange={(e) => setDiscount(e.target.value)}
-            value={discount}
-            className="w-full px-3 py-2 sm:w-[120px]"
-            type="Number"
-            placeholder="0"
-            min="0"
-            max="100"
-          />
+        <div className="flex flex-wrap gap-4">
+          <div>
+            <p className="mb-2">Selling Price</p>
+            <input
+              onChange={(e) => setPrice(e.target.value)}
+              value={price}
+              className="w-full px-3 py-2 sm:w-[120px]"
+              type="Number"
+              placeholder="25"
+              required
+            />
+          </div>
+          <div>
+            <p className="mb-2 text-emerald-900 font-medium">Cost Price (Supplier)</p>
+            <input
+              onChange={(e) => setCostPrice(e.target.value)}
+              value={costPrice}
+              className="w-full px-3 py-2 sm:w-[130px] border border-emerald-300 bg-emerald-50/30 rounded"
+              type="Number"
+              placeholder="0"
+              min="0"
+            />
+          </div>
+          <div>
+            <p className="mb-2">Discount (%)</p>
+            <input
+              onChange={(e) => setDiscount(e.target.value)}
+              value={discount}
+              className="w-full px-3 py-2 sm:w-[110px]"
+              type="Number"
+              placeholder="0"
+              min="0"
+              max="100"
+            />
+          </div>
+          <div>
+            <p className="mb-2 text-amber-900 font-medium">Low Stock Alert</p>
+            <input
+              onChange={(e) => setLowStockThreshold(e.target.value)}
+              value={lowStockThreshold}
+              className="w-full px-3 py-2 sm:w-[120px] border border-amber-300 bg-amber-50/40 rounded"
+              type="Number"
+              placeholder="5"
+              min="1"
+            />
+          </div>
         </div>
       </div>
 
@@ -410,29 +508,45 @@ const Add = ({ token }) => {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-6 mt-2">
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-6 mt-2">
+        <div className="flex items-center gap-2">
           <input
             onChange={() => setBestSeller((prev) => !prev)}
             checked={bestseller}
             type="checkbox"
             id="bestseller"
           />
-          <label className="cursor-pointer" htmlFor="bestseller">
+          <label className="cursor-pointer text-sm font-medium" htmlFor="bestseller">
             Add to bestseller
           </label>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <input
             onChange={() => setPublished((prev) => !prev)}
             checked={published}
             type="checkbox"
             id="published"
           />
-          <label className="cursor-pointer font-medium text-green-700" htmlFor="published">
+          <label className="cursor-pointer font-medium text-sm text-green-700" htmlFor="published">
             Publish Immediately
           </label>
         </div>
+      </div>
+
+      <div className="flex items-center gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-lg max-w-[500px]">
+        <input
+          onChange={() => setNewInStore((prev) => !prev)}
+          checked={newInStore}
+          type="checkbox"
+          id="newInStore"
+          className="w-4 h-4 accent-amber-600 cursor-pointer"
+        />
+        <label className="cursor-pointer text-xs font-semibold text-amber-900" htmlFor="newInStore">
+          Feature as &quot;New in Store&quot; (Hero Section)
+          <span className="block text-[11px] font-normal text-amber-700 mt-0.5">
+            Only 1 product can be &quot;New in Store&quot;. Checking this will replace any previously featured product.
+          </span>
+        </label>
       </div>
 
       <button type="submit" className="w-28 py-3 mt-4 bg-black text-white">

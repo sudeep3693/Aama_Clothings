@@ -13,17 +13,21 @@ const List = ({ token }) => {
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editPrice, setEditPrice] = useState("");
+  const [editCostPrice, setEditCostPrice] = useState("");
   const [editDiscount, setEditDiscount] = useState("");
-  const [editCategory, setEditCategory] = useState("");
+  const [editCategories, setEditCategories] = useState([]);
   const [editSubCategory, setEditSubCategory] = useState("");
   const [editBestseller, setEditBestseller] = useState(false);
+  const [editNewInStore, setEditNewInStore] = useState(false);
   const [editPublished, setEditPublished] = useState(true);
+  const [editLowStockThreshold, setEditLowStockThreshold] = useState(5);
   const [editVariants, setEditVariants] = useState([]);
   const [variantSize, setVariantSize] = useState("S");
   const [variantColor, setVariantColor] = useState("");
   const [variantQty, setVariantQty] = useState("");
   const [editImage1, setEditImage1] = useState(null);
   const [colorsList, setColorsList] = useState([]);
+  const [categoriesList, setCategoriesList] = useState([]);
 
   const fetchList = async () => {
     try {
@@ -80,16 +84,39 @@ const List = ({ token }) => {
     }
   };
 
+  const parseCategories = (val) => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val.filter(Boolean);
+    if (typeof val === "string") {
+      const trimmed = val.trim();
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) return parsed.filter(Boolean);
+        } catch {}
+      }
+      return trimmed.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+  };
+
   const openEditModal = (product) => {
     setEditingProduct(product);
     setEditName(product.name || "");
     setEditDescription(product.description || "");
     setEditPrice(product.price || "");
+    setEditCostPrice(product.costPrice !== undefined ? product.costPrice : 0);
     setEditDiscount(product.discount || 0);
-    setEditCategory(product.category || "");
+    const cats =
+      product.categories && product.categories.length > 0
+        ? product.categories
+        : parseCategories(product.category);
+    setEditCategories(cats.length > 0 ? cats : ["Men"]);
     setEditSubCategory(product.subCategory || "");
     setEditBestseller(product.bestseller || false);
+    setEditNewInStore(product.newInStore || false);
     setEditPublished(product.published !== undefined ? product.published : true);
+    setEditLowStockThreshold(product.lowStockThreshold !== undefined ? product.lowStockThreshold : 5);
     setEditVariants(product.variants || []);
     setVariantSize("S");
     setVariantColor("");
@@ -99,20 +126,27 @@ const List = ({ token }) => {
 
   const saveEditHandler = async (e) => {
     e.preventDefault();
+    if (editCategories.length === 0) {
+      toast.error("Please select at least 1 category");
+      return;
+    }
     try {
       const formData = new FormData();
       formData.append("id", editingProduct._id);
       formData.append("name", editName);
       formData.append("description", editDescription);
       formData.append("price", editPrice);
+      formData.append("costPrice", editCostPrice || 0);
       formData.append("discount", editDiscount);
-      formData.append("category", editCategory);
+      formData.append("category", JSON.stringify(editCategories));
       formData.append("subCategory", editSubCategory);
       
       const computedStockQuantity = editVariants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0);
       formData.append("stockQuantity", computedStockQuantity);
+      formData.append("lowStockThreshold", editLowStockThreshold);
       
       formData.append("bestseller", editBestseller);
+      formData.append("newInStore", editNewInStore);
       formData.append("published", editPublished);
       
       const allSizes = [...new Set(editVariants.map(v => v.size))];
@@ -144,12 +178,18 @@ const List = ({ token }) => {
     }
   };
 
-  const fetchColors = async () => {
+  const fetchColorsAndCategories = async () => {
     try {
-      const response = await axios.get(backendUrl + "/api/color/list");
-      if (response.data.success && response.data.colors.length > 0) {
-        setColorsList(response.data.colors);
-        setVariantColor(response.data.colors[0].name);
+      const [colRes, catRes] = await Promise.all([
+        axios.get(backendUrl + "/api/color/list"),
+        axios.get(backendUrl + "/api/category/list"),
+      ]);
+      if (colRes.data.success && colRes.data.colors.length > 0) {
+        setColorsList(colRes.data.colors);
+        setVariantColor(colRes.data.colors[0].name);
+      }
+      if (catRes.data.success && catRes.data.categories.length > 0) {
+        setCategoriesList(catRes.data.categories);
       }
     } catch (error) {
       console.log(error);
@@ -158,7 +198,7 @@ const List = ({ token }) => {
 
   useEffect(() => {
     fetchList();
-    fetchColors();
+    fetchColorsAndCategories();
   }, []);
 
   return (
@@ -196,13 +236,32 @@ const List = ({ token }) => {
             <img className="w-12 h-12 object-cover rounded" src={item.image[0]} alt="" />
             <div>
               <p className="font-medium text-gray-800">{item.name}</p>
-              {item.bestseller && (
-                <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-semibold">
-                  Bestseller
-                </span>
-              )}
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {item.newInStore && (
+                  <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded font-bold">
+                    New in Store
+                  </span>
+                )}
+                {item.bestseller && (
+                  <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-semibold">
+                    Bestseller
+                  </span>
+                )}
+              </div>
             </div>
-            <p className="text-gray-600">{item.category}</p>
+            <div className="flex flex-wrap gap-1">
+              {(item.categories && item.categories.length > 0
+                ? item.categories
+                : parseCategories(item.category)
+              ).map((cat, i) => (
+                <span
+                  key={i}
+                  className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200"
+                >
+                  {cat}
+                </span>
+              ))}
+            </div>
             <div>
               {item.discount > 0 ? (
                 <div>
@@ -222,12 +281,16 @@ const List = ({ token }) => {
                 <span className="bg-red-100 text-red-700 text-xs font-semibold px-2 py-1 rounded">
                   Out of Stock
                 </span>
+              ) : item.stockQuantity <= (item.lowStockThreshold || 5) ? (
+                <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-1 rounded border border-amber-300">
+                  ⚠️ Low Stock ({item.stockQuantity})
+                </span>
               ) : (
                 <span className="bg-green-100 text-green-700 text-xs font-semibold px-2 py-1 rounded">
                   In Stock
                 </span>
               )}
-              {item.stockQuantity > 0 && (
+              {item.stockQuantity > (item.lowStockThreshold || 5) && (
                 <p className="text-[10px] text-gray-500 mt-0.5">
                   {item.stockQuantity} left
                 </p>
@@ -294,28 +357,99 @@ const List = ({ token }) => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div>
-                  <label className="block mb-1 font-medium">Price ({currency})</label>
+                  <label className="block mb-1 font-medium text-xs">Selling Price ({currency})</label>
                   <input
                     type="number"
                     value={editPrice}
                     onChange={(e) => setEditPrice(e.target.value)}
-                    className="w-full border px-3 py-2 rounded"
+                    className="w-full border px-2.5 py-1.5 rounded text-sm"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block mb-1 font-medium">Discount (%)</label>
+                  <label className="block mb-1 font-medium text-xs text-emerald-900">Cost Price ({currency})</label>
+                  <input
+                    type="number"
+                    value={editCostPrice}
+                    onChange={(e) => setEditCostPrice(e.target.value)}
+                    className="w-full border border-emerald-300 bg-emerald-50/30 px-2.5 py-1.5 rounded text-sm"
+                    min="0"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 font-medium text-xs">Discount (%)</label>
                   <input
                     type="number"
                     value={editDiscount}
                     onChange={(e) => setEditDiscount(e.target.value)}
-                    className="w-full border px-3 py-2 rounded"
+                    className="w-full border px-2.5 py-1.5 rounded text-sm"
                     min="0"
                     max="100"
                   />
                 </div>
+                <div>
+                  <label className="block mb-1 font-medium text-xs text-amber-900">Low Stock Alert</label>
+                  <input
+                    type="number"
+                    value={editLowStockThreshold}
+                    onChange={(e) => setEditLowStockThreshold(e.target.value)}
+                    className="w-full border border-amber-300 bg-amber-50/30 px-2.5 py-1.5 rounded text-sm"
+                    min="1"
+                    placeholder="5"
+                  />
+                </div>
+              </div>
+
+              {/* Multi-category Selector */}
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="font-semibold text-xs text-gray-700">Categories (Select 1 or more)</label>
+                  <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full">
+                    {editCategories.length} selected
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {categoriesList.map((c) => {
+                    const isSelected = editCategories.includes(c.name);
+                    return (
+                      <button
+                        key={c.id || c.name}
+                        type="button"
+                        onClick={() => {
+                          setEditCategories((prev) =>
+                            prev.includes(c.name)
+                              ? prev.length === 1
+                                ? prev
+                                : prev.filter((x) => x !== c.name)
+                              : [...prev, c.name]
+                          );
+                        }}
+                        className={`px-2.5 py-1 rounded text-xs font-semibold border transition-all ${
+                          isSelected
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
+                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                        }`}
+                      >
+                        {isSelected ? "✓ " : "+ "}
+                        {c.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block mb-1 font-medium">Sub Category (Type)</label>
+                <input
+                  type="text"
+                  value={editSubCategory}
+                  onChange={(e) => setEditSubCategory(e.target.value)}
+                  className="w-full border px-3 py-2 rounded"
+                  required
+                />
               </div>
 
               <div>
@@ -417,16 +551,31 @@ const List = ({ token }) => {
                 />
               </div>
 
-              <div className="flex gap-2">
-                <input
-                  type="checkbox"
-                  id="editBestseller"
-                  checked={editBestseller}
-                  onChange={(e) => setEditBestseller(e.target.checked)}
-                />
-                <label htmlFor="editBestseller" className="cursor-pointer">
-                  Bestseller Product
-                </label>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="editBestseller"
+                    checked={editBestseller}
+                    onChange={(e) => setEditBestseller(e.target.checked)}
+                  />
+                  <label htmlFor="editBestseller" className="cursor-pointer text-sm">
+                    Bestseller Product
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded">
+                  <input
+                    type="checkbox"
+                    id="editNewInStore"
+                    checked={editNewInStore}
+                    onChange={(e) => setEditNewInStore(e.target.checked)}
+                    className="accent-amber-600 cursor-pointer"
+                  />
+                  <label htmlFor="editNewInStore" className="cursor-pointer text-xs font-semibold text-amber-900">
+                    Feature as &quot;New in Store&quot; (Only 1 product active)
+                  </label>
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 mt-4">

@@ -3,6 +3,23 @@ import { ShopContext } from "../context/ShopContext";
 import axios from "axios";
 import { toast } from "react-toastify";
 import TermsAndConditionsModal from "../components/TermsAndConditionsModal";
+import CryptoJS from "crypto-js";
+
+// Encrypt a plaintext password with AES-256-CBC using a random IV
+const encryptPassword = (plaintext) => {
+  const keyHex = import.meta.env.VITE_AES_KEY;
+  const key = CryptoJS.enc.Hex.parse(keyHex);
+  const iv = CryptoJS.lib.WordArray.random(16); // 128-bit random IV
+  const encrypted = CryptoJS.AES.encrypt(plaintext, key, {
+    iv,
+    mode: CryptoJS.mode.CBC,
+    padding: CryptoJS.pad.Pkcs7,
+  });
+  return {
+    encryptedPassword: encrypted.ciphertext.toString(CryptoJS.enc.Base64),
+    iv: iv.toString(CryptoJS.enc.Hex),
+  };
+};
 
 const Login = () => {
   const [currentState, setCurrentState] = useState("Login");
@@ -53,9 +70,12 @@ const Login = () => {
           toast.error(response.data.message);
         }
       } else {
+        // AES-encrypt password before sending over the wire
+        const { encryptedPassword, iv } = encryptPassword(password);
         const response = await axios.post(backendUrl + "/api/user/login", {
           email: email.trim().toLowerCase(),
-          password,
+          encryptedPassword,
+          iv,
         });
         if (response.data.success) {
           setToken(response.data.token);
@@ -72,6 +92,7 @@ const Login = () => {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     if (token) {

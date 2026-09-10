@@ -42,6 +42,33 @@ const Collection = () => {
     fetchDynamicFilters();
   }, [backendUrl]);
 
+  // Dynamically include any custom categories present on products (e.g. Festival Offer)
+  useEffect(() => {
+    if (products && products.length > 0) {
+      setCategoriesList((prev) => {
+        const prodCats = [];
+        products.forEach((p) => {
+          if (Array.isArray(p.categories)) {
+            prodCats.push(...p.categories);
+          } else if (typeof p.category === "string" && p.category) {
+            const trimmed = p.category.trim();
+            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+              try {
+                prodCats.push(...JSON.parse(trimmed));
+              } catch {
+                prodCats.push(trimmed);
+              }
+            } else {
+              prodCats.push(...trimmed.split(",").map((s) => s.trim()));
+            }
+          }
+        });
+        const combined = Array.from(new Set([...prev, ...prodCats.filter(Boolean)]));
+        return combined;
+      });
+    }
+  }, [products]);
+
   const toggleCategory = (e) => {
     if (category.includes(e.target.value)) {
       setCategory((prev) => prev.filter((item) => item !== e.target.value));
@@ -62,15 +89,36 @@ const Collection = () => {
     let productsCopy = products.slice();
 
     if (showSearch && search) {
-      productsCopy = productsCopy.filter((item) =>
-        item.name.toLowerCase().includes(search.toLowerCase())
-      );
+      const q = search.toLowerCase().trim();
+      productsCopy = productsCopy.filter((item) => {
+        const matchName = item.name.toLowerCase().includes(q);
+        const matchSub = item.subCategory && item.subCategory.toLowerCase().includes(q);
+        const matchCat = Array.isArray(item.categories)
+          ? item.categories.some((c) => c.toLowerCase().includes(q))
+          : typeof item.category === "string" && item.category.toLowerCase().includes(q);
+        return matchName || matchSub || matchCat;
+      });
     }
 
     if (category.length > 0) {
-      productsCopy = productsCopy.filter((item) =>
-        category.includes(item.category)
-      );
+      productsCopy = productsCopy.filter((item) => {
+        let itemCats = [];
+        if (Array.isArray(item.categories)) {
+          itemCats = item.categories;
+        } else if (typeof item.category === "string") {
+          const trimmed = item.category.trim();
+          if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            try {
+              itemCats = JSON.parse(trimmed);
+            } catch {
+              itemCats = [trimmed];
+            }
+          } else {
+            itemCats = trimmed.split(",").map((s) => s.trim()).filter(Boolean);
+          }
+        }
+        return itemCats.some((c) => category.includes(c));
+      });
     }
 
     if (subCategory.length > 0) {
@@ -91,7 +139,19 @@ const Collection = () => {
       case "high-low":
         setFilterProducts(fpCopy.sort((a, b) => b.price - a.price));
         break;
-
+      case "newest":
+        setFilterProducts(fpCopy.sort((a, b) => Number(b.date || 0) - Number(a.date || 0)));
+        break;
+      case "top-rated":
+        setFilterProducts(
+          fpCopy.sort((a, b) => {
+            const rA = Number(a.rating || 0);
+            const rB = Number(b.rating || 0);
+            if (rB !== rA) return rB - rA;
+            return (b.reviewCount || 0) - (a.reviewCount || 0);
+          })
+        );
+        break;
       default:
         applyFilter();
         break;
@@ -171,11 +231,13 @@ const Collection = () => {
           {/* Product Sort */}
           <select
             onChange={(e) => setSortType(e.target.value)}
-            className="border-2 border-gray-300 text-sm px-2"
+            className="border-2 border-gray-300 text-sm px-2 py-1 rounded"
           >
             <option value="relavent">Sort by: Relevant</option>
-            <option value="low-high">Sort by: Low to High</option>
-            <option value="high-low">Sort by: Hight to Low</option>
+            <option value="newest">Sort by: Newest Arrivals</option>
+            <option value="top-rated">Sort by: Top Rated</option>
+            <option value="low-high">Sort by: Price: Low to High</option>
+            <option value="high-low">Sort by: Price: High to Low</option>
           </select>
         </div>
         {/* Map Products */}
@@ -190,6 +252,10 @@ const Collection = () => {
               discount={item.discount}
               stockStatus={item.stockStatus}
               stockQuantity={item.stockQuantity ?? 0}
+              rating={item.rating}
+              reviewCount={item.reviewCount}
+              newInStore={item.newInStore}
+              bestseller={item.bestseller}
             />
           ))}
         </div>

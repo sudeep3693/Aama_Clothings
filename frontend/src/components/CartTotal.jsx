@@ -59,7 +59,7 @@ const CartTotal = ({
           <>
             <div className="flex justify-between items-start text-indigo-600 font-semibold">
               <div>
-                <p className="flex items-center gap-1">🎁 Special Gift</p>
+                <p className="flex items-center gap-1">Complimentary Gift</p>
                 {loyaltyGift.description && (
                   <p className="text-[11px] text-indigo-500 font-normal">{loyaltyGift.description}</p>
                 )}
@@ -76,7 +76,7 @@ const CartTotal = ({
         {loyaltyGift?.letterIncluded && (
           <>
             <div className="flex justify-between items-center text-violet-600 font-semibold">
-              <p className="flex items-center gap-1">💌 Handwritten Thank-You Note</p>
+              <p className="flex items-center gap-1">Handwritten Thank-You Note</p>
               <p className="text-[11px] font-semibold">Included</p>
             </div>
             <hr />
@@ -87,7 +87,7 @@ const CartTotal = ({
         {loyaltyGift?.customPerk && (
           <>
             <div className="flex justify-between items-center text-amber-700 font-semibold">
-              <p className="flex items-center gap-1">✨ {loyaltyGift.customPerk}</p>
+              <p className="flex items-center gap-1">{loyaltyGift.customPerk}</p>
               <p className="text-[11px] font-semibold text-amber-600">VIP Perk</p>
             </div>
             <hr />
@@ -113,6 +113,11 @@ const CartTotal = ({
           <b>Total</b>
           <b className="text-gray-900">{currency} {grandTotal}.00</b>
         </div>
+        {subtotal > 0 && (
+          <p className="text-[11px] text-gray-500 text-right -mt-1">
+            Inclusive of 13% VAT ({currency}{((subtotal / 1.13) * 0.13).toFixed(2)})
+          </p>
+        )}
 
       </div>
     </div>

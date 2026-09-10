@@ -2,6 +2,7 @@ import { prisma } from "../config/db.js";
 import validator from "validator";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { decryptAES } from "../utils/crypto.js";
 
 const createToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET);
@@ -25,7 +26,19 @@ const parseJsonArray = (val) => {
 // Route for user login
 const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, encryptedPassword, iv } = req.body;
+
+    if (!encryptedPassword || !iv) {
+      return res.json({ success: false, message: "Encrypted password and IV are required" });
+    }
+
+    // Decrypt the AES-encrypted password sent from the client
+    let password;
+    try {
+      password = decryptAES(encryptedPassword, iv);
+    } catch {
+      return res.json({ success: false, message: "Invalid encrypted credentials" });
+    }
 
     const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     if (!user) {
@@ -344,19 +357,43 @@ const changePassword = async (req, res) => {
   }
 };
 
-// Route for admin login
+// Route for admin login — credentials stored in DB, password AES-encrypted in transit
 const adminLogin = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (
-      email === process.env.ADMIN_EMAIL &&
-      password === process.env.ADMIN_PASSWORD
-    ) {
-      const token = jwt.sign(email + password, process.env.JWT_SECRET);
-      res.json({ success: true, token });
-    } else {
-      res.json({ success: false, message: "Invalid credentials" });
+    const { email, encryptedPassword, iv } = req.body;
+
+    if (!email || !encryptedPassword || !iv) {
+      return res.json({ success: false, message: "Email and encrypted password are required" });
     }
+
+    // Decrypt the AES-encrypted password
+    let password;
+    try {
+      password = decryptAES(encryptedPassword, iv);
+    } catch {
+      return res.json({ success: false, message: "Invalid encrypted credentials" });
+    }
+
+    // Look up admin in DB
+    const admin = await prisma.admin.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+    if (!admin) {
+      return res.json({ success: false, message: "Invalid credentials" });
+    }
+
+    // Compare bcrypt hash
+    const isMatch = await bcrypt.compare(password, admin.password);
+    if (!isMatch) {
+      return res.json({ success: false, message: "Invalid credentials" });
+    }
+
+    // Sign JWT with role:admin so authAdmin middleware can verify it
+    const token = jwt.sign(
+      { adminId: admin.id, role: "admin" },
+      process.env.JWT_SECRET
+    );
+    res.json({ success: true, token });
   } catch (error) {
     console.log(error);
     res.json({ success: false, message: error.message });

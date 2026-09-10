@@ -12,6 +12,23 @@ const toImageArray = (val) => {
   return [];
 };
 
+// Helper: normalize category input into a clean string array
+const normalizeCategories = (val) => {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map((s) => String(s).trim()).filter(Boolean);
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed.map((s) => String(s).trim()).filter(Boolean);
+      } catch {}
+    }
+    return trimmed.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+};
+
 // function for add product
 const addProduct = async (req, res) => {
   try {
@@ -23,8 +40,11 @@ const addProduct = async (req, res) => {
       subCategory,
       sizes,
       bestseller,
+      newInStore,
       discount,
+      costPrice,
       stockQuantity,
+      lowStockThreshold,
       colors,
       variants,
       published,
@@ -49,25 +69,53 @@ const addProduct = async (req, res) => {
     );
 
     const qty = stockQuantity !== undefined ? parseInt(stockQuantity, 10) : 0;
+    const categoriesArray = normalizeCategories(category);
+    const isNewInStore = newInStore === "true" || newInStore === true;
+
+    // If marked as new in store, ensure all existing products have newInStore = false
+    if (isNewInStore) {
+      await prisma.product.updateMany({
+        data: { newInStore: false },
+      });
+    }
 
     const productData = {
       name,
       description,
       price: Number(price),
-      category,
+      category: JSON.stringify(categoriesArray),
       subCategory,
       sizes: typeof sizes === "string" ? JSON.parse(sizes) : sizes,
       image: imagesUrl,
       bestseller: bestseller === "true" || bestseller === true ? true : false,
+      newInStore: isNewInStore,
       discount: discount ? Number(discount) : 0,
+      costPrice: costPrice !== undefined && costPrice !== null && costPrice !== "" ? Number(costPrice) : 0,
       stockQuantity: qty,
+      lowStockThreshold: lowStockThreshold !== undefined ? parseInt(lowStockThreshold, 10) : 5,
       colors: typeof colors === "string" ? JSON.parse(colors) : colors || [],
       variants: typeof variants === "string" ? JSON.parse(variants) : variants || [],
       published: published === "false" || published === false ? false : true,
       date: BigInt(Date.now()),
     };
 
-    await prisma.product.create({ data: productData });
+    const newProduct = await prisma.product.create({ data: productData });
+
+    // Log initial stock
+    if (qty > 0) {
+      await prisma.stockLog.create({
+        data: {
+          productId: newProduct.id,
+          productName: name,
+          previousQty: 0,
+          newQty: qty,
+          changeQty: qty,
+          reason: "INITIAL_STOCK",
+          note: "Stock set during product creation",
+          source: "admin",
+        },
+      });
+    }
 
     res.json({ success: true, message: "Product Added" });
   } catch (error) {
@@ -88,8 +136,10 @@ const updateProduct = async (req, res) => {
       subCategory,
       sizes,
       bestseller,
+      newInStore,
       discount,
       stockQuantity,
+      lowStockThreshold,
       colors,
       variants,
       published,
@@ -132,17 +182,35 @@ const updateProduct = async (req, res) => {
       newQty = parseInt(stockQuantity, 10);
     }
 
+    const categoryStorage =
+      category !== undefined ? JSON.stringify(normalizeCategories(category)) : undefined;
+
+    let isNewInStore = undefined;
+    if (newInStore !== undefined) {
+      isNewInStore = newInStore === "true" || newInStore === true;
+      if (isNewInStore) {
+        // Unset any other product that had newInStore = true
+        await prisma.product.updateMany({
+          where: { id: { not: id } },
+          data: { newInStore: false },
+        });
+      }
+    }
+
     const updateData = {
       ...(name && { name }),
       ...(description && { description }),
       ...(price !== undefined && { price: Number(price) }),
-      ...(category && { category }),
+      ...(categoryStorage !== undefined && { category: categoryStorage }),
       ...(subCategory && { subCategory }),
       ...(sizes && { sizes: typeof sizes === "string" ? JSON.parse(sizes) : sizes }),
       image: imagesUrl,
       ...(bestseller !== undefined && { bestseller: bestseller === "true" || bestseller === true }),
+      ...(isNewInStore !== undefined && { newInStore: isNewInStore }),
       ...(discount !== undefined && { discount: Number(discount) }),
+      ...(costPrice !== undefined && { costPrice: Number(costPrice) }),
       stockQuantity: newQty,
+      ...(lowStockThreshold !== undefined && { lowStockThreshold: parseInt(lowStockThreshold, 10) }),
       ...(colors !== undefined && { colors: typeof colors === "string" ? JSON.parse(colors) : colors }),
       ...(variants !== undefined && { variants: typeof variants === "string" ? JSON.parse(variants) : variants }),
       ...(published !== undefined && { published: published === "true" || published === true }),
@@ -190,13 +258,46 @@ const listProducts = async (req, res) => {
     // Admin sees all products; Public customers see only published products
     const whereCondition = isAdmin ? {} : { published: true };
 
-    const rawProducts = await prisma.product.findMany({ where: whereCondition });
-    const products = rawProducts.map((item) => ({
-      ...item,
-      _id: item.id,
-      date: Number(item.date),
-      image: toImageArray(item.image),
-    }));
+    const [rawProducts, allReviews] = await Promise.all([
+      prisma.product.findMany({
+        where: whereCondition,
+        orderBy: { date: "desc" },
+      }),
+      prisma.review.findMany({
+        select: { productId: true, rating: true },
+      }),
+    ]);
+
+    // Build rating lookup map per product
+    const reviewStatsMap = {};
+    for (const r of allReviews) {
+      if (!reviewStatsMap[r.productId]) {
+        reviewStatsMap[r.productId] = { sum: 0, count: 0 };
+      }
+      reviewStatsMap[r.productId].sum += Number(r.rating) || 5;
+      reviewStatsMap[r.productId].count += 1;
+    }
+
+    const products = rawProducts.map((item) => {
+      const cats = normalizeCategories(item.category);
+      const rStats = reviewStatsMap[item.id] || { sum: 0, count: 0 };
+      const avgRating = rStats.count > 0 ? Number((rStats.sum / rStats.count).toFixed(1)) : 0;
+
+      return {
+        ...item,
+        _id: item.id,
+        date: Number(item.date),
+        image: toImageArray(item.image),
+        categories: cats,
+        category: cats.join(", "),
+        newInStore: Boolean(item.newInStore),
+        costPrice: Number(item.costPrice || 0),
+        lowStockThreshold: item.lowStockThreshold || 5,
+        rating: avgRating,
+        reviewCount: rStats.count,
+      };
+    });
+
     res.json({ success: true, products });
   } catch (error) {
     console.log(error);
@@ -228,11 +329,31 @@ const singleProduct = async (req, res) => {
     if (!rawProduct) {
       return res.json({ success: false, message: "Product not found" });
     }
+
+    // Get review stats
+    const productReviews = await prisma.review.findMany({
+      where: { productId },
+      select: { rating: true },
+    });
+    let ratingSum = 0;
+    for (const r of productReviews) {
+      ratingSum += Number(r.rating) || 5;
+    }
+    const avgRating = productReviews.length > 0 ? Number((ratingSum / productReviews.length).toFixed(1)) : 0;
+
+    const cats = normalizeCategories(rawProduct.category);
     const product = {
       ...rawProduct,
       _id: rawProduct.id,
       date: Number(rawProduct.date),
       image: toImageArray(rawProduct.image),
+      categories: cats,
+      category: cats.join(", "),
+      newInStore: Boolean(rawProduct.newInStore),
+      costPrice: Number(rawProduct.costPrice || 0),
+      lowStockThreshold: rawProduct.lowStockThreshold || 5,
+      rating: avgRating,
+      reviewCount: productReviews.length,
     };
     res.json({ success: true, product });
   } catch (error) {
@@ -241,4 +362,121 @@ const singleProduct = async (req, res) => {
   }
 };
 
-export { addProduct, updateProduct, togglePublish, listProducts, removeProduct, singleProduct };
+// Adjust stock for a product (restock, manual correction, return)
+const adjustStock = async (req, res) => {
+  try {
+    const { productId, adjustments, reason, note, source } = req.body;
+
+    if (!productId || !adjustments || !reason) {
+      return res.json({ success: false, message: "productId, adjustments, and reason are required" });
+    }
+
+    const product = await prisma.product.findUnique({ where: { id: productId } });
+    if (!product) {
+      return res.json({ success: false, message: "Product not found" });
+    }
+
+    let parsedVariants = typeof product.variants === "string"
+      ? JSON.parse(product.variants || "[]")
+      : (product.variants || []);
+    const hasVariants = Array.isArray(parsedVariants) && parsedVariants.length > 0;
+
+    const stockLogs = [];
+
+    if (hasVariants && adjustments.length > 0 && adjustments[0].size) {
+      // Variant-level adjustments
+      for (const adj of adjustments) {
+        const vIdx = parsedVariants.findIndex(
+          (v) => v.size === adj.size && v.color === adj.color
+        );
+        if (vIdx !== -1) {
+          const previousQty = Number(parsedVariants[vIdx].quantity || 0);
+          const changeQty = Number(adj.quantity || 0);
+          const newQty = Math.max(0, previousQty + changeQty);
+          parsedVariants[vIdx].quantity = newQty;
+
+          stockLogs.push({
+            productId,
+            productName: product.name,
+            variantLabel: `${adj.size} / ${adj.color}`,
+            previousQty,
+            newQty,
+            changeQty,
+            reason,
+            note: note || null,
+            source: source || "admin",
+          });
+        }
+      }
+
+      // Sync total stockQuantity from variants
+      const totalVariantStock = parsedVariants.reduce(
+        (acc, v) => acc + (Number(v.quantity) || 0), 0
+      );
+
+      await prisma.product.update({
+        where: { id: productId },
+        data: { variants: parsedVariants, stockQuantity: totalVariantStock },
+      });
+    } else {
+      // Simple product-level stock adjustment
+      const totalChange = adjustments.reduce((sum, a) => sum + Number(a.quantity || 0), 0);
+      const previousQty = product.stockQuantity || 0;
+      const newQty = Math.max(0, previousQty + totalChange);
+
+      stockLogs.push({
+        productId,
+        productName: product.name,
+        previousQty,
+        newQty,
+        changeQty: totalChange,
+        reason,
+        note: note || null,
+        source: source || "admin",
+      });
+
+      await prisma.product.update({
+        where: { id: productId },
+        data: { stockQuantity: newQty },
+      });
+    }
+
+    // Create stock log entries
+    if (stockLogs.length > 0) {
+      await prisma.stockLog.createMany({ data: stockLogs });
+    }
+
+    res.json({ success: true, message: "Stock adjusted successfully" });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// Get stock movement logs (filterable, paginated)
+const getStockLogs = async (req, res) => {
+  try {
+    const { productId, limit, offset } = req.query;
+    const take = parseInt(limit) || 50;
+    const skip = parseInt(offset) || 0;
+
+    const where = productId ? { productId } : {};
+
+    const [logs, total] = await Promise.all([
+      prisma.stockLog.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take,
+        skip,
+      }),
+      prisma.stockLog.count({ where }),
+    ]);
+
+    res.json({ success: true, logs, total });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+export { addProduct, updateProduct, togglePublish, listProducts, removeProduct, singleProduct, adjustStock, getStockLogs };

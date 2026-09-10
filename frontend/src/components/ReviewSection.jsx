@@ -486,10 +486,10 @@ const ReviewSection = ({ productId, productName, onStatsUpdate }) => {
             onChange={(e) => setSortBy(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-xs text-gray-700 bg-white font-medium focus:outline-none focus:ring-1 focus:ring-black cursor-pointer shadow-sm"
           >
-            <option value="likes">🔥 Most Liked / Helpful</option>
-            <option value="recent">🕒 Newest First</option>
-            <option value="rating_high">⭐ Highest Rating</option>
-            <option value="rating_low">📉 Lowest Rating</option>
+            <option value="likes">Most Helpful</option>
+            <option value="recent">Newest First</option>
+            <option value="rating_high">Highest Rating</option>
+            <option value="rating_low">Lowest Rating</option>
           </select>
         </div>
       </div>
@@ -550,7 +550,7 @@ const ReviewSection = ({ productId, productName, onStatsUpdate }) => {
                         )}
                         {isTopReview && (
                           <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-amber-200">
-                            🏆 Top Review
+                            Top Review
                           </span>
                         )}
                       </div>
