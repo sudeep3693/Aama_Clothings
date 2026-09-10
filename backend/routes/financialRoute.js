@@ -9,10 +9,15 @@ import {
   createFixedAsset,
   runDepreciationBatch,
   recordAssetDamageOrDisposal,
+  getCapTableAndValuation,
   getPartnershipOverview,
   savePartner,
+  issueNewShares,
+  transferOrSellShare,
+  updateCompanyValuation,
   calculateAndExecuteProfitDistribution,
   getInvestorsAndLiabilities,
+  getLoanSchedule,
   recordInvestorFinancing,
   recordLiabilityRepayment,
   getPayablesAndReceivables,
@@ -42,13 +47,18 @@ financialRouter.post("/create-asset", adminAuth, createFixedAsset);
 financialRouter.post("/run-depreciation", adminAuth, runDepreciationBatch);
 financialRouter.post("/damage-asset", adminAuth, recordAssetDamageOrDisposal);
 
-// Partnership & Profit Distribution
+// Cap Table, Shares, Company Valuation & Profit Distribution
+financialRouter.get("/cap-table-valuation", adminAuth, getCapTableAndValuation);
 financialRouter.get("/partnership-overview", adminAuth, getPartnershipOverview);
 financialRouter.post("/save-partner", adminAuth, savePartner);
+financialRouter.post("/issue-new-shares", adminAuth, issueNewShares);
+financialRouter.post("/transfer-share", adminAuth, transferOrSellShare);
+financialRouter.post("/update-valuation", adminAuth, updateCompanyValuation);
 financialRouter.post("/profit-distribution", adminAuth, calculateAndExecuteProfitDistribution);
 
-// Investors & Liabilities
+// Advanced Debt, Loans & Liabilities
 financialRouter.get("/liabilities", adminAuth, getInvestorsAndLiabilities);
+financialRouter.get("/loan-schedule/:id", adminAuth, getLoanSchedule);
 financialRouter.post("/record-financing", adminAuth, recordInvestorFinancing);
 financialRouter.post("/repay-liability", adminAuth, recordLiabilityRepayment);
 
