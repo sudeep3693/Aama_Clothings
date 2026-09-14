@@ -1649,14 +1649,18 @@ export const calculateAndExecuteProfitDistribution = async (req, res) => {
     const pStart = periodStart ? new Date(periodStart) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const pEnd = periodEnd ? new Date(periodEnd) : new Date();
 
-    const [orders, monthlyExpenses, partners] = await Promise.all([
+    const [orders, operatingExpensesList, partners] = await Promise.all([
       prisma.order.findMany({
         where: {
           date: { gte: BigInt(pStart.getTime()), lte: BigInt(pEnd.getTime()) },
           status: { notIn: ["Cancelled"] },
         },
       }),
-      prisma.monthlyExpense.findMany(),
+      prisma.operatingExpense.findMany({
+        where: {
+          date: { gte: pStart, lte: pEnd },
+        },
+      }),
       prisma.partnerEquity.findMany({ where: { status: "ACTIVE" } }),
     ]);
 
@@ -1667,17 +1671,9 @@ export const calculateAndExecuteProfitDistribution = async (req, res) => {
     const grossRevenue = orders.reduce((acc, o) => acc + Number(o.amount || 0), 0);
     const taxableRevenue = grossRevenue / 1.13;
     const estCOGS = taxableRevenue * 0.55;
-    const totalExpenses = monthlyExpenses.reduce(
-      (acc, e) =>
-        acc +
-        Number(e.salaries || 0) +
-        Number(e.officeRent || 0) +
-        Number(e.marketingSpend || 0) +
-        Number(e.utilities || 0),
-      0
-    );
+    const totalExpenses = operatingExpensesList.reduce((acc, e) => acc + Number(e.amount || 0), 0);
 
-    const netProfit = Math.max(0, taxableRevenue - estCOGS - totalExpenses / 12);
+    const netProfit = Math.max(0, taxableRevenue - estCOGS - totalExpenses);
     const retainPct = Number(retainedEarningsPercentage || 20);
     const retainedAmount = Number(((netProfit * retainPct) / 100).toFixed(2));
     const distributableAmount = Number((netProfit - retainedAmount).toFixed(2));
@@ -2599,7 +2595,7 @@ export const getFinancialStatements = async (req, res) => {
     const [
       orders,
       products,
-      monthlyExpense,
+      operatingExpensesList,
       accounts,
       fixedAssets,
       partners,
@@ -2615,7 +2611,11 @@ export const getFinancialStatements = async (req, res) => {
         },
       }),
       prisma.product.findMany(),
-      prisma.monthlyExpense.findUnique({ where: { yearMonth: requestedMonth } }),
+      prisma.operatingExpense.findMany({
+        where: {
+          date: { gte: startDate, lte: endDate },
+        },
+      }),
       prisma.financialAccount.findMany({ where: { status: "ACTIVE" } }),
       prisma.fixedAsset.findMany(),
       prisma.partnerEquity.findMany({ where: { status: "ACTIVE" } }),
@@ -2640,8 +2640,8 @@ export const getFinancialStatements = async (req, res) => {
     const netRevenue = Math.max(0, grossRevenue - returnsAndAllowances);
     const taxableNetRevenue = Number((netRevenue / 1.13).toFixed(2));
 
-    // COGS
-    let cogs = 0;
+    // COGS (Manufacturer COGS is 13% VAT Inclusive)
+    let cogsIncVat = 0;
     const costMap = {};
     products.forEach((p) => { costMap[p.id] = Number(p.costPrice || 0); });
     orders.forEach((ord) => {
@@ -2650,19 +2650,35 @@ export const getFinancialStatements = async (req, res) => {
       items.forEach((item) => {
         const qty = Number(item.quantity || 1);
         const pId = item.productId || item._id || item.id;
-        cogs += (costMap[pId] || 0) * qty;
+        cogsIncVat += (costMap[pId] || 0) * qty;
       });
     });
 
+    const cogs = Number((cogsIncVat / 1.13).toFixed(2));
     const grossProfit = Number((taxableNetRevenue - cogs).toFixed(2));
 
-    const marketing = monthlyExpense ? Number(monthlyExpense.marketingSpend || 0) : 0;
-    const rent = monthlyExpense ? Number(monthlyExpense.officeRent || 0) : 0;
-    const salaries = monthlyExpense ? Number(monthlyExpense.salaries || 0) : 0;
-    const utilities = monthlyExpense ? Number(monthlyExpense.utilities || 0) : 0;
-    const software = monthlyExpense ? Number(monthlyExpense.softwareTools || 0) : 0;
-    const misc = monthlyExpense ? Number(monthlyExpense.miscExpenses || 0) : 0;
-    const totalOpex = marketing + rent + salaries + utilities + software + misc;
+    // Operating Overhead Expenses Breakdown
+    let marketing = 0;
+    let rent = 0;
+    let electricity = 0;
+    let salaries = 0;
+    let utilities = 0;
+    let maintenance = 0;
+    let misc = 0;
+
+    operatingExpensesList.forEach((exp) => {
+      const amt = Number(exp.amount || 0);
+      const cat = (exp.category || "MISCELLANEOUS").toUpperCase();
+      if (cat === "MARKETING") marketing += amt;
+      else if (cat === "RENT") rent += amt;
+      else if (cat === "ELECTRICITY") electricity += amt;
+      else if (cat === "SALARIES") salaries += amt;
+      else if (cat === "UTILITIES") utilities += amt;
+      else if (cat === "MAINTENANCE") maintenance += amt;
+      else misc += amt;
+    });
+
+    const totalOpex = marketing + rent + electricity + salaries + utilities + maintenance + misc;
 
     let depreciation = 0;
     fixedAssets.forEach((a) => {
@@ -2695,6 +2711,47 @@ export const getFinancialStatements = async (req, res) => {
     const retainedEarnings = Number((totalAssets - totalLiabilities - partnerCapital).toFixed(2));
     const totalEquity = Number((partnerCapital + retainedEarnings).toFixed(2));
 
+    // Cash Flow Statement (GAAP / IFRS Direct & Indirect Reconciled)
+    // 1. Operating Cash Inflows / Outflows
+    const cashFromCustomers = Number(netRevenue.toFixed(2));
+    const cashPaidToSuppliers = Number(cogsIncVat.toFixed(2));
+    const cashPaidForOperatingExpenses = Number(totalOpex.toFixed(2));
+    const netOperatingCashFlow = Number((cashFromCustomers - cashPaidToSuppliers - cashPaidForOperatingExpenses).toFixed(2));
+
+    // 2. Investing Cash Outflows (Capital Asset Purchases ONLY; Depreciation is Non-Cash)
+    const assetAdditionsInPeriod = fixedAssets
+      .filter((a) => a.createdAt && new Date(a.createdAt) >= startDate && new Date(a.createdAt) <= endDate)
+      .reduce((sum, a) => sum + Number(a.paidAmount || a.purchaseCost || 0), 0);
+    const netInvestingCashFlow = -Number(assetAdditionsInPeriod.toFixed(2));
+
+    // 3. Financing Cash Flows (Capital Injections, Loans, Repayments, Drawings)
+    const capitalInjectionsInPeriod = partners
+      .filter((p) => p.createdAt && new Date(p.createdAt) >= startDate && new Date(p.createdAt) <= endDate)
+      .reduce((sum, p) => sum + Number(p.initialCapital || 0), 0);
+    const loansDisbursedInPeriod = liabilities
+      .filter((l) => l.createdAt && new Date(l.createdAt) >= startDate && new Date(l.createdAt) <= endDate)
+      .reduce((sum, l) => sum + Number(l.principalAmount || 0), 0);
+    const loanRepaymentsInPeriod = liabilities.reduce((sum, l) => sum + Number(l.principalPaid || 0), 0);
+    const partnerDrawingsInPeriod = partners.reduce((sum, p) => sum + Number(p.totalDrawings || 0), 0);
+
+    const netFinancingCashFlow = Number(
+      (capitalInjectionsInPeriod + loansDisbursedInPeriod - loanRepaymentsInPeriod - partnerDrawingsInPeriod).toFixed(2)
+    );
+
+    // 4. Net Cash Flow & Liquid Cash Reconciliation
+    const netCashFlow = Number((netOperatingCashFlow + netInvestingCashFlow + netFinancingCashFlow).toFixed(2));
+    const endingCash = cashAndEquivalents;
+    const beginningCash = Number((endingCash - netCashFlow).toFixed(2));
+
+    // 5. Indirect Method Operating Cash Flow Reconciliation
+    const vatDifference = Number((netRevenue - taxableNetRevenue - (cogsIncVat - cogs)).toFixed(2));
+    const indirectReconciliation = {
+      netIncome: netIncomeAfterTax,
+      depreciationAddback: depreciation,
+      taxAndVatAdjustment: vatDifference,
+      reconciledOperatingCashFlow: netOperatingCashFlow,
+    };
+
     res.json({
       success: true,
       data: {
@@ -2708,9 +2765,10 @@ export const getFinancialStatements = async (req, res) => {
           operatingExpenses: {
             marketing,
             rent,
+            electricity,
             salaries,
             utilities,
-            software,
+            maintenance,
             misc,
             total: totalOpex,
           },
@@ -2748,10 +2806,25 @@ export const getFinancialStatements = async (req, res) => {
           balanceCheck: totalAssets === Number((totalLiabilities + totalEquity).toFixed(2)),
         },
         cashFlowStatement: {
-          operatingActivities: Number((netIncomeAfterTax + depreciation).toFixed(2)),
-          investingActivities: -Number(depreciation),
-          financingActivities: 0,
-          netCashFlow: Number((netIncomeAfterTax + depreciation - depreciation).toFixed(2)),
+          operatingActivities: netOperatingCashFlow,
+          investingActivities: netInvestingCashFlow,
+          financingActivities: netFinancingCashFlow,
+          netCashFlow,
+          beginningCash,
+          endingCash,
+          details: {
+            cashFromCustomers,
+            cashPaidToSuppliers: -cashPaidToSuppliers,
+            cashPaidForOperatingExpenses: -cashPaidForOperatingExpenses,
+            netOperatingCashFlow,
+            assetAdditionsInPeriod: netInvestingCashFlow,
+            capitalInjectionsInPeriod,
+            loansDisbursedInPeriod,
+            loanRepaymentsInPeriod: -loanRepaymentsInPeriod,
+            partnerDrawingsInPeriod: -partnerDrawingsInPeriod,
+            netFinancingCashFlow,
+          },
+          indirectReconciliation,
         },
       },
     });

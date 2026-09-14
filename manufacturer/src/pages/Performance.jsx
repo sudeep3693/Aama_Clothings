@@ -136,9 +136,9 @@ const Performance = () => {
               </span>
             </div>
             <div className="flex items-center justify-between py-2">
-              <span className="text-slate-500">Payout Commission</span>
+              <span className="text-slate-500">Payout Model</span>
               <span className="font-bold text-emerald-600">
-                {manufacturer.commissionRate || 12}% per fulfilled order
+                100% Agreed Supply COGS
               </span>
             </div>
           </div>

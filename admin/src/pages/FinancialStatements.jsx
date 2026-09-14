@@ -346,45 +346,151 @@ const FinancialStatements = ({ token }) => {
         <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-xs max-w-4xl space-y-6">
           <div className="text-center pb-4 border-b border-slate-100">
             <h2 className="text-lg font-black text-slate-900">Aama Clothings Inc.</h2>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Statement of Cash Flows</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Statement of Cash Flows (Direct Method &amp; Reconciled)</p>
             <p className="text-xs text-slate-500 font-medium mt-1">For Period Ending {selectedMonth}</p>
           </div>
 
-          <div className="space-y-4 text-xs text-slate-700">
+          <div className="space-y-6 text-xs text-slate-700">
+            {/* OPERATING CASH FLOWS */}
             <div>
-              <p className="font-bold text-slate-900 uppercase tracking-wider text-[11px] mb-2">Cash Flows from Operating Activities</p>
+              <p className="font-bold text-slate-900 uppercase tracking-wider text-[11px] mb-2">
+                Cash Flows from Operating Activities
+              </p>
               <div className="space-y-1 pl-4">
                 <div className="flex justify-between py-1 border-b border-slate-50">
-                  <span>Net Cash from Customer Sales &amp; Operations</span>
-                  <span className="font-mono text-emerald-600">{currency}{(cf.operatingActivities || 0).toLocaleString()}</span>
+                  <span>Cash Inflows from Customer Sales &amp; Collections</span>
+                  <span className="font-mono text-emerald-600 font-bold">
+                    +{currency}{Number(cf.details?.cashFromCustomers || (typeof cf.operatingActivities === 'number' ? cf.operatingActivities : 0)).toLocaleString()}
+                  </span>
+                </div>
+                {cf.details?.cashPaidToSuppliers !== undefined && (
+                  <div className="flex justify-between py-1 border-b border-slate-50 text-rose-600">
+                    <span>Cash Outflows to Suppliers / Manufacturer COGS</span>
+                    <span className="font-mono">
+                      ({currency}{Math.abs(cf.details.cashPaidToSuppliers).toLocaleString()})
+                    </span>
+                  </div>
+                )}
+                {cf.details?.cashPaidForOperatingExpenses !== undefined && (
+                  <div className="flex justify-between py-1 border-b border-slate-50 text-rose-600">
+                    <span>Cash Outflows for Overhead Expenses (Rent, Ads, Electricity, Salaries)</span>
+                    <span className="font-mono">
+                      ({currency}{Math.abs(cf.details.cashPaidForOperatingExpenses).toLocaleString()})
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between py-1 font-bold text-slate-900 pt-2 border-t border-slate-100">
+                  <span>Net Cash Provided by / (Used in) Operating Activities</span>
+                  <span className={`font-mono ${ (typeof cf.operatingActivities === 'number' ? cf.operatingActivities : cf.details?.netOperatingCashFlow || 0) >= 0 ? "text-emerald-600" : "text-rose-600" }`}>
+                    {currency}{Number(typeof cf.operatingActivities === 'number' ? cf.operatingActivities : cf.details?.netOperatingCashFlow || 0).toLocaleString()}
+                  </span>
                 </div>
               </div>
             </div>
 
+            {/* INVESTING CASH FLOWS */}
             <div>
-              <p className="font-bold text-slate-900 uppercase tracking-wider text-[11px] mb-2">Cash Flows from Investing Activities</p>
+              <p className="font-bold text-slate-900 uppercase tracking-wider text-[11px] mb-2">
+                Cash Flows from Investing Activities
+              </p>
               <div className="space-y-1 pl-4">
-                <div className="flex justify-between py-1 border-b border-slate-50 text-slate-500">
-                  <span>Fixed Asset Additions / Maintenance</span>
-                  <span className="font-mono">{currency}{(cf.investingActivities || 0).toLocaleString()}</span>
+                <div className="flex justify-between py-1 border-b border-slate-50 text-slate-600">
+                  <span>Fixed Asset Additions &amp; Capital Purchases</span>
+                  <span className="font-mono">
+                    {cf.details?.assetAdditionsInPeriod !== undefined ? (
+                      cf.details.assetAdditionsInPeriod === 0 ? "Rs 0" : `(${currency}${Math.abs(cf.details.assetAdditionsInPeriod).toLocaleString()})`
+                    ) : (
+                      `${currency}${Number(cf.investingActivities || 0).toLocaleString()}`
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 font-bold text-slate-900 pt-1 border-t border-slate-100">
+                  <span>Net Cash Used in Investing Activities</span>
+                  <span className="font-mono">{currency}{Number(cf.investingActivities || 0).toLocaleString()}</span>
                 </div>
               </div>
             </div>
 
+            {/* FINANCING CASH FLOWS */}
             <div>
-              <p className="font-bold text-slate-900 uppercase tracking-wider text-[11px] mb-2">Cash Flows from Financing Activities</p>
+              <p className="font-bold text-slate-900 uppercase tracking-wider text-[11px] mb-2">
+                Cash Flows from Financing Activities
+              </p>
               <div className="space-y-1 pl-4">
-                <div className="flex justify-between py-1 border-b border-slate-50 text-slate-500">
-                  <span>Partner Equity / Debt Financing Activity</span>
-                  <span className="font-mono">{currency}{(cf.financingActivities || 0).toLocaleString()}</span>
+                <div className="flex justify-between py-1 border-b border-slate-50 text-slate-600">
+                  <span>Capital Contributed &amp; Investor Borrowings</span>
+                  <span className="font-mono">
+                    +{currency}{Number((cf.details?.capitalInjectionsInPeriod || 0) + (cf.details?.loansDisbursedInPeriod || 0)).toLocaleString()}
+                  </span>
+                </div>
+                {(cf.details?.loanRepaymentsInPeriod !== undefined || cf.details?.partnerDrawingsInPeriod !== undefined) && (
+                  <div className="flex justify-between py-1 border-b border-slate-50 text-rose-600">
+                    <span>Loan Principal Repayments &amp; Partner Drawings</span>
+                    <span className="font-mono">
+                      ({currency}{Math.abs((cf.details?.loanRepaymentsInPeriod || 0) + (cf.details?.partnerDrawingsInPeriod || 0)).toLocaleString()})
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between py-1 font-bold text-slate-900 pt-1 border-t border-slate-100">
+                  <span>Net Cash from Financing Activities</span>
+                  <span className="font-mono">{currency}{Number(cf.financingActivities || 0).toLocaleString()}</span>
                 </div>
               </div>
             </div>
 
-            <div className="pt-4 border-t-2 border-slate-900 flex justify-between items-center font-black text-slate-900 text-sm">
-              <span>NET CHANGE IN LIQUID CASH</span>
-              <span className="font-mono text-emerald-600 text-base">{currency}{(cf.netCashFlow || 0).toLocaleString()}</span>
+            {/* NET CHANGE & LIQUID CASH RECONCILIATION */}
+            <div className="pt-4 border-t-2 border-slate-900 space-y-3">
+              <div className="flex justify-between items-center font-black text-slate-900 text-sm">
+                <span>NET CHANGE IN LIQUID CASH</span>
+                <span className={`font-mono text-base ${ (cf.netCashFlow || 0) >= 0 ? "text-emerald-600" : "text-rose-600" }`}>
+                  {currency}{Number(cf.netCashFlow || 0).toLocaleString()}
+                </span>
+              </div>
+
+              {cf.beginningCash !== undefined && (
+                <div className="space-y-1.5 pt-2 border-t border-slate-100 text-slate-600 font-medium">
+                  <div className="flex justify-between py-0.5">
+                    <span>Beginning Liquid Cash Balance</span>
+                    <span className="font-mono">{currency}{Number(cf.beginningCash || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between py-0.5 font-bold text-slate-900 text-xs">
+                    <span>Ending Liquid Treasury Cash Balance</span>
+                    <span className="font-mono text-emerald-700 font-extrabold">{currency}{Number(cf.endingCash || 0).toLocaleString()}</span>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* INDIRECT METHOD OPERATING CASH FLOW RECONCILIATION */}
+            {cf.indirectReconciliation && (
+              <div className="mt-6 pt-4 border-t border-dashed border-slate-300 bg-slate-50 p-4 rounded-xl space-y-2">
+                <p className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">
+                  Indirect Method Reconciliation (Net Income to Operating Cash)
+                </p>
+                <div className="space-y-1 text-slate-600 pl-2">
+                  <div className="flex justify-between py-0.5">
+                    <span>Net Income (Bottom Line Profit / Loss)</span>
+                    <span className={`font-mono font-bold ${cf.indirectReconciliation.netIncome >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                      {currency}{Number(cf.indirectReconciliation.netIncome || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-0.5">
+                    <span>Add Non-Cash Expenses (Depreciation)</span>
+                    <span className="font-mono">+{currency}{Number(cf.indirectReconciliation.depreciationAddback || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between py-0.5">
+                    <span>Working Capital &amp; Cash Tax Adjustments</span>
+                    <span className="font-mono">+{currency}{Number(cf.indirectReconciliation.taxAndVatAdjustment || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-t border-slate-200 font-bold text-slate-900 pt-1">
+                    <span>Reconciled Net Operating Cash Flow</span>
+                    <span className="font-mono text-slate-900">
+                      {currency}{Number(cf.indirectReconciliation.reconciledOperatingCashFlow || 0).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

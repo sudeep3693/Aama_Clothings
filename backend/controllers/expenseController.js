@@ -1,4 +1,5 @@
 import { prisma } from "../config/db.js";
+import { postExpenseAccounting } from "../services/accountingPostingEngine.js";
 
 // Helper: Calculate 13% embedded VAT amount
 const calculateVat = (amount, isVatBill, customVat) => {
@@ -49,6 +50,17 @@ export const createExpense = async (req, res) => {
         notes: notes ? notes.trim() : null,
         createdBy: "ADMIN",
       },
+    });
+
+    // Auto-post double-entry GL journal entry to General Ledger & Chart of Accounts
+    await postExpenseAccounting({
+      expenseId: expense.id,
+      category: expense.category,
+      title: expense.title,
+      amount: expense.amount,
+      paidFromAccountType: expense.paymentMethod === "CASH" ? "CASH" : "BANK",
+      isPayable: expense.paymentMethod === "CREDIT",
+      payeeName: expense.vendorName,
     });
 
     res.json({ success: true, message: "Expense recorded successfully!", expense });

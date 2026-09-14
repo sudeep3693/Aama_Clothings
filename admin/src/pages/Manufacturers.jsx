@@ -331,8 +331,8 @@ const Manufacturers = ({ token }) => {
                   </div>
 
                   <div className="flex items-center justify-between py-1">
-                    <span className="text-slate-400">Commission Rate:</span>
-                    <span className="font-bold text-slate-800">{m.commissionRate || 12}%</span>
+                    <span className="text-slate-400">Payout Model:</span>
+                    <span className="font-bold text-emerald-600">100% Agreed COGS</span>
                   </div>
                 </div>
               </div>
@@ -477,21 +477,7 @@ const Manufacturers = ({ token }) => {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Commission %</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.commissionRate}
-                    onChange={(e) =>
-                      setFormData({ ...formData, commissionRate: Number(e.target.value) })
-                    }
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-slate-900"
-                  />
-                </div>
-
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Contract Start</label>
                   <input
