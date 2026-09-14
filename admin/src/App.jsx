@@ -28,6 +28,10 @@ import ChartOfAccounts from "./pages/ChartOfAccounts";
 import JournalEntries from "./pages/JournalEntries";
 import GeneralLedger from "./pages/GeneralLedger";
 import TrialBalance from "./pages/TrialBalance";
+import Manufacturers from "./pages/Manufacturers";
+import DeliveryPartners from "./pages/DeliveryPartners";
+import OrderAssignments from "./pages/OrderAssignments";
+import ManufacturerInventoryMonitor from "./pages/ManufacturerInventoryMonitor";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -80,6 +84,10 @@ const App = () => {
                   <Route path="/create-order" element={<CreateOrder token={token} />} />
                   <Route path="/add-order" element={<CreateOrder token={token} />} />
                   <Route path="/orders" element={<Orders token={token} />} />
+                  <Route path="/order-assignments" element={<OrderAssignments token={token} />} />
+                  <Route path="/manufacturers" element={<Manufacturers token={token} />} />
+                  <Route path="/delivery-partners" element={<DeliveryPartners token={token} />} />
+                  <Route path="/manufacturer-inventory" element={<ManufacturerInventoryMonitor token={token} />} />
                   <Route path="/customers" element={<Customers token={token} />} />
                   <Route path="/loyalty-levels" element={<LoyaltyLevels token={token} />} />
                   <Route path="/categories" element={<Categories token={token} />} />

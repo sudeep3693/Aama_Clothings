@@ -44,17 +44,31 @@ model Product {
 }
 
 model Order {
-  id              String  @id @default(uuid())
-  userId          String
-  items           Json
-  amount          Float
-  address         Json
-  status          String  @default("Order Placed")
-  paymentMethod   String
-  payment         Boolean @default(false)
-  date            BigInt
-  loyaltyDiscount Float?  @default(0)
-  rewardApplied   Json?
+  id                  String  @id @default(uuid())
+  userId              String
+  items               Json
+  amount              Float
+  address             Json
+  status              String  @default("Order Placed")
+  paymentMethod       String
+  payment             Boolean @default(false)
+  date                BigInt
+  loyaltyDiscount     Float?  @default(0)
+  rewardApplied       Json?
+  // Fulfillment tracking
+  fulfillmentStatus   String  @default("PENDING_ASSIGNMENT")
+  // PENDING_ASSIGNMENT | ASSIGNED | ACCEPTED | MANUFACTURING | QUALITY_CHECK | PACKED | READY_FOR_PICKUP | PICKED_UP | IN_TRANSIT | DELIVERED | FAILED
+  assignmentId        String?
+  deliveryJobId       String?
+  orderType           String  @default("ONLINE_STORE") // ONLINE_STORE | DIRECT_MANUFACTURER
+  directOrderType     String? @default("") // HUB_VISIT | PHONE_ORDER
+  manufacturerId      String? // Fulfilled directly by manufacturer
+  directNotes         String? @db.Text
+
+  @@index([fulfillmentStatus])
+  @@index([userId])
+  @@index([orderType])
+  @@index([manufacturerId])
 }
 
 model Category {
@@ -572,3 +586,145 @@ model JournalLine {
   @@index([customerId])
   @@index([supplierId])
 }
+
+// ============================================================
+// MANUFACTURER & DELIVERY PARTNER DOMAIN
+// ============================================================
+
+model Manufacturer {
+  id                   String   @id @default(uuid())
+  name                 String
+  email                String   @unique
+  password             String   // bcrypt hashed
+  phone                String
+  city                 String   // e.g. "Kathmandu", "Pokhara", "Biratnagar"
+  address              String?  @db.Text
+  qualityRating        Float    @default(5.0)     // Dynamic 1.0–5.0 calculated from customer product reviews
+  ratingCount          Int      @default(0)       // Total customer reviews applied
+  isActive             Boolean  @default(true)
+  isAvailable          Boolean  @default(true)    // manufacturer can toggle
+  // Contract fields
+  contractStatus       String   @default("ACTIVE") // ACTIVE | SUSPENDED | TERMINATED
+  contractDocUrl       String?  @db.Text           // uploaded PDF URL (Cloudinary)
+  contractStartDate    DateTime?
+  contractExpiryDate   DateTime?
+  agreementNotes       String?  @db.Text
+  // Performance counters (updated by system)
+  totalOrdersFulfilled Int      @default(0)
+  onTimeCount          Int      @default(0)
+  defectCount          Int      @default(0)
+  rejectionCount       Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  inventory   ManufacturerInventory[]
+  assignments OrderAssignment[]
+
+  @@index([city])
+  @@index([isActive, isAvailable])
+}
+
+// Per-manufacturer inventory for each product
+model ManufacturerInventory {
+  id                String       @id @default(uuid())
+  manufacturerId    String
+  productId         String
+  productName       String       // denormalized for display speed
+  quantity          Int          @default(0)   // actual physical stock (sum of variants)
+  reservedQty       Int          @default(0)   // reserved for accepted/in-progress orders
+  variantsStock     Json         @default("[]") // [{ size, color, quantity, reservedQty }]
+  proposedCostPrice Float?       // manufacturer proposed supply cost price
+  agreedCostPrice   Float?       // admin accepted agreed supply cost price
+  priceStatus       String       @default("PENDING") // PENDING | APPROVED | REJECTED
+  priceNote         String?      @db.Text
+  adminFeedback     String?      @db.Text
+  lastUpdated       DateTime     @updatedAt
+
+  manufacturer      Manufacturer @relation(fields: [manufacturerId], references: [id], onDelete: Cascade)
+
+  @@unique([manufacturerId, productId])
+  @@index([productId])
+  @@index([manufacturerId])
+}
+
+// Order assignment from Allocation Engine to a Manufacturer
+model OrderAssignment {
+  id              String       @id @default(uuid())
+  orderId         String       @unique
+  manufacturerId  String
+  status          String       @default("PENDING_ACCEPTANCE")
+  // PENDING_ACCEPTANCE | ACCEPTED | MANUFACTURING | QUALITY_CHECK | PACKED | READY_FOR_PICKUP | PICKED_UP | REJECTED
+  assignedAt      DateTime     @default(now())
+  acceptedAt      DateTime?
+  manufacturingAt DateTime?
+  qualityCheckAt  DateTime?
+  packedAt        DateTime?
+  readyAt         DateTime?
+  pickedUpAt      DateTime?
+  notes           String?      @db.Text
+  rejectionReason String?
+
+  manufacturer    Manufacturer  @relation(fields: [manufacturerId], references: [id])
+  deliveryJob     DeliveryJob?
+
+  @@index([orderId])
+  @@index([manufacturerId])
+  @@index([status])
+}
+
+// Delivery Partner entity
+model DeliveryPartner {
+  id               String   @id @default(uuid())
+  name             String
+  email            String   @unique
+  password         String   // bcrypt hashed
+  phone            String
+  city             String
+  vehicleType      String?  @default("Motorcycle")
+  licenseNumber    String?
+  isActive         Boolean  @default(true)
+  isAvailable      Boolean  @default(true)
+  rating           Float    @default(5.0)
+  totalDeliveries  Int      @default(0)
+  onTimeDeliveries Int      @default(0)
+  failedDeliveries Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  deliveryJobs     DeliveryJob[]
+
+  @@index([city])
+  @@index([isActive, isAvailable])
+}
+
+// Delivery job assigned to a DeliveryPartner
+model DeliveryJob {
+  id                String          @id @default(uuid())
+  assignmentId      String          @unique
+  deliveryPartnerId String
+  orderId           String
+  pickupCity        String          // manufacturer's city
+  pickupAddress     String?         @db.Text  // manufacturer address for pickup
+  dropoffCity       String          // customer delivery city
+  dropoffAddress    Json            // full customer address (revealed after accept)
+  status            String          @default("ASSIGNED")
+  // ASSIGNED | ACCEPTED | AT_PICKUP | PICKED_UP | IN_TRANSIT | DELIVERED | FAILED
+  codAmount         Float           @default(0)   // cash to collect from customer
+  codCollected      Boolean         @default(false)
+  proofOfDelivery   String?         // image URL
+  assignedAt        DateTime        @default(now())
+  acceptedAt        DateTime?
+  atPickupAt        DateTime?
+  pickedUpAt        DateTime?
+  inTransitAt       DateTime?
+  deliveredAt       DateTime?
+  failureReason     String?
+
+  assignment        OrderAssignment  @relation(fields: [assignmentId], references: [id])
+  deliveryPartner   DeliveryPartner  @relation(fields: [deliveryPartnerId], references: [id])
+
+  @@index([deliveryPartnerId])
+  @@index([orderId])
+  @@index([status])
+}
+

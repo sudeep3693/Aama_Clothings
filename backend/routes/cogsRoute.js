@@ -1,23 +1,19 @@
 import express from "express";
 import {
   getCOGSOverview,
-  saveMonthlyExpense,
-  getMonthlyExpenses,
-  saveInboundShipment,
-  getInboundShipments,
-  deleteInboundShipment,
-  updateProductCostPrice,
+  acceptProposedPrice,
+  rejectProposedPrice,
+  getPendingProposals,
 } from "../controllers/cogsController.js";
-import adminAuth from "../middleware/adminAuth.js";
+import { authAdmin } from "../middleware/auth.js";
 
 const cogsRouter = express.Router();
 
-cogsRouter.get("/overview", adminAuth, getCOGSOverview);
-cogsRouter.get("/monthly-expenses", adminAuth, getMonthlyExpenses);
-cogsRouter.post("/save-monthly-expense", adminAuth, saveMonthlyExpense);
-cogsRouter.get("/shipments", adminAuth, getInboundShipments);
-cogsRouter.post("/save-shipment", adminAuth, saveInboundShipment);
-cogsRouter.post("/delete-shipment", adminAuth, deleteInboundShipment);
-cogsRouter.post("/update-cost-price", adminAuth, updateProductCostPrice);
+// Admin-protected COGS & Manufacturer Pricing Agreement routes
+cogsRouter.get("/overview", authAdmin, getCOGSOverview);
+cogsRouter.get("/margins", authAdmin, getCOGSOverview);
+cogsRouter.get("/pending-proposals", authAdmin, getPendingProposals);
+cogsRouter.post("/accept-price", authAdmin, acceptProposedPrice);
+cogsRouter.post("/reject-price", authAdmin, rejectProposedPrice);
 
 export default cogsRouter;

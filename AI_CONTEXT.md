@@ -4,22 +4,32 @@ Purpose
 - Provide guidance to LLMs and developer tools working on this repository: coding standards, naming conventions, file locations, testing expectations, and constraints to respect when generating or modifying code.
 
 1. Repository overview for LLMs
-- Root layout: frontend/, admin/, backend/ (primary work occurs in backend/ and frontend/)
-- Backend uses Node.js, Express, Prisma (MySQL); frontend uses React + Vite + Tailwind.
-- Significant files:
-  - backend/prisma/schema.prisma — canonical DB schema
-  - backend/controllers/*.js — business logic (use these as behavioral source of truth)
-  - backend/config/db.js — Prisma client
-  - backend/.env.example — required environment variables
-  - frontend/src/* — UI components and routes
+- Root layout: `frontend/` (storefront), `admin/` (admin cockpit), `manufacturer/` (manufacturer hub), `delivery/` (courier driver fleet), `backend/` (REST API).
+- Backend uses Node.js, Express, Prisma (MySQL); frontends use React + Vite + Tailwind CSS.
+- Port Allocation:
+  - `frontend/` (Port 5173) — Customer shopping & checkout
+  - `admin/` (Port 5174) — Admin governance, finance, network routing & multi-hub inventory
+  - `manufacturer/` (Port 5175) — Factory order fulfillment, packaging & stock management
+  - `delivery/` (Port 5176) — Courier run acceptance, pickup & doorstep COD delivery
+  - `backend/` (Port 4000) — REST API server
+- Significant backend files:
+  - `backend/prisma/schema.prisma` — canonical DB schema
+  - `backend/controllers/orderAssignmentController.js` — Proximity-based order allocation engine
+  - `backend/controllers/manufacturerController.js` — Manufacturer onboarding, agreements, quality score
+  - `backend/controllers/deliveryJobController.js` — Courier dispatch, COD collection, proof of delivery
+  - `backend/controllers/manufacturerInventoryController.js` — Quantity-aware multi-hub stock management
+  - `backend/config/db.js` — Prisma client
+  - `backend/server.js` — Express server & CORS configuration
 
 2. Coding standards and conventions
 - JavaScript style:
   - ESM modules (import/export). Use async/await for async ops.
   - Naming: camelCase for variables and functions, PascalCase for React components and Prisma model names.
   - Keep controllers thin: validate input, call prisma, transform data, and return JSON.
-- Error handling: controllers catch exceptions and return { success: false, message: error.message }. Prefer preserving existing pattern but propose migration to proper status codes if asked.
-- Avoid changing response schema unexpectedly: many clients expect { success, message, ... }.
+- Error handling: controllers catch exceptions and return { success: false, message: error.message }.
+- Avoid changing response schema unexpectedly: all clients expect { success, message, ... }.
+
+-- End of AI_CONTEXT.md --
 
 3. File paths & boundaries
 - Backend modifications should stay under backend/ unless frontend/back-end contract changes required.

@@ -4,6 +4,7 @@ import {
   postSalesOrderAccounting,
   postCustomerPaymentAccounting,
 } from "../services/accountingPostingEngine.js";
+import { runAllocationEngine } from "./orderAssignmentController.js";
 
 // global variables
 const deliveryCharge = 50;
@@ -305,6 +306,17 @@ const placeOrder = async (req, res) => {
         console.error("StockLog creation failed in placeOrder:", logErr);
       }
     }
+
+    // Trigger allocation engine asynchronously (non-blocking)
+    runAllocationEngine(createdOrder.id).then((result) => {
+      if (!result.success) {
+        console.warn(`[Allocation] Order ${createdOrder.id} could not be auto-assigned: ${result.message}`);
+      } else {
+        console.log(`[Allocation] Order ${createdOrder.id} assigned to manufacturer ${result.assignment?.manufacturerId}`);
+      }
+    }).catch((err) => {
+      console.error("[Allocation] Engine error:", err);
+    });
 
     res.json({ success: true, message: "Order Placed Successfully" });
 

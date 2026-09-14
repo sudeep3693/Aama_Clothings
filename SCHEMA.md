@@ -161,8 +161,40 @@ Security-sensitive fields
 - Passwords (User.password, Admin.password): bcrypt-hashed
 - AES_SECRET_KEY used to decrypt client-sent encrypted password payloads — ensure AES_SECRET_KEY is strong and not leaked.
 
+Distributed Manufacturing & Logistics Domain (Models)
+- Manufacturer
+  - Table: Manufacturer
+  - Primary Key: id (String, uuid)
+  - Fields: businessName, email @unique, password (bcrypt), phone, address, city, isAvailable (Boolean @default(true)), qualityRating (Float @default(5.0)), qualityNotes (Text?), contractStatus (String @default("ACTIVE")), contractDocUrl (String?), contractStart (DateTime?), contractEnd (DateTime?), commissionRate (Float @default(12.0)), totalOrdersHandled (Int @default(0)), createdAt, updatedAt
+  - Relations: inventories (ManufacturerInventory[]), assignments (OrderAssignment[])
+
+- ManufacturerInventory
+  - Table: ManufacturerInventory
+  - Primary Key: id (String, uuid)
+  - Fields: manufacturerId, productId, quantity (Int @default(0)), reservedQty (Int @default(0)), lowStockThreshold (Int @default(5)), restockNote (String?), createdAt, updatedAt
+  - Constraints: @@unique([manufacturerId, productId])
+  - Relations: manufacturer (Manufacturer), product (Product)
+
+- OrderAssignment
+  - Table: OrderAssignment
+  - Primary Key: id (String, uuid)
+  - Fields: orderId @unique, manufacturerId, status (String @default("assigned")), declineReason (String?), packagingNotes (String?), packageWeight (String?), packageDimensions (String?), assignedAt, acceptedAt, packagedAt, deliveredAt, createdAt, updatedAt
+  - Relations: order (Order), manufacturer (Manufacturer), deliveryJob (DeliveryJob?)
+
+- DeliveryPartner
+  - Table: DeliveryPartner
+  - Primary Key: id (String, uuid)
+  - Fields: name, email @unique, password (bcrypt), phone, city, vehicleType (String @default("BIKE")), isAvailable (Boolean @default(true)), totalDeliveries (Int @default(0)), createdAt, updatedAt
+  - Relations: jobs (DeliveryJob[])
+
+- DeliveryJob
+  - Table: DeliveryJob
+  - Primary Key: id (String, uuid)
+  - Fields: orderAssignmentId @unique, deliveryPartnerId, status (String @default("assigned")), pickupAddress (Text?), deliveryAddress (Text?), codAmount (Float @default(0)), isCodCollected (Boolean @default(false)), proofOfDelivery (String?), recipientName (String?), deliveryNotes (Text?), failureReason (String?), assignedAt, pickedUpAt, deliveredAt, createdAt, updatedAt
+  - Relations: orderAssignment (OrderAssignment), deliveryPartner (DeliveryPartner)
+
 Appendix: Quick model map (names only)
-User, Product, Order, Category, SubCategory, Color, Review, ShippingConfig, CustomerLevel, CustomerLetterImage, SpecialOffer, StockLog, InboundShipment, MonthlyExpense, Admin, FinancialAccount, CashTransaction, FixedAsset, PartnerEquity, CompanyValuation, ShareTransaction, ProfitDistribution, InvestorLiability, CustomerReturn, SupplierReturn, TaxConfiguration, TaxFilingRecord, AccountPayable, AccountReceivable, Account, FiscalYear, AccountingPeriod, JournalEntry, JournalLine
+User, Product, Order, Category, SubCategory, Color, Review, ShippingConfig, CustomerLevel, CustomerLetterImage, SpecialOffer, StockLog, InboundShipment, MonthlyExpense, Admin, FinancialAccount, CashTransaction, FixedAsset, PartnerEquity, CompanyValuation, ShareTransaction, ProfitDistribution, InvestorLiability, CustomerReturn, SupplierReturn, TaxConfiguration, TaxFilingRecord, AccountPayable, AccountReceivable, Account, FiscalYear, AccountingPeriod, JournalEntry, JournalLine, Manufacturer, ManufacturerInventory, OrderAssignment, DeliveryPartner, DeliveryJob
 
 -- End of SCHEMA.md --
 

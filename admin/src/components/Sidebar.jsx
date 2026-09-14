@@ -100,6 +100,58 @@ const Sidebar = () => {
           </nav>
         </div>
 
+        {/* SECTION: DISTRIBUTED NETWORK & LOGISTICS */}
+        <div>
+          <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+            Manufacturer &amp; Logistics
+          </p>
+          <nav className="space-y-1">
+            <NavLink to="/order-assignments" className={navLinkStyle}>
+              {({ isActive }) => (
+                <>
+                  <svg className={iconStyle(isActive)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span>Order Routing Engine</span>
+                </>
+              )}
+            </NavLink>
+
+            <NavLink to="/manufacturers" className={navLinkStyle}>
+              {({ isActive }) => (
+                <>
+                  <svg className={iconStyle(isActive)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <span>Manufacturers &amp; Quality</span>
+                </>
+              )}
+            </NavLink>
+
+            <NavLink to="/delivery-partners" className={navLinkStyle}>
+              {({ isActive }) => (
+                <>
+                  <svg className={iconStyle(isActive)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1" />
+                  </svg>
+                  <span>Delivery Partner Fleet</span>
+                </>
+              )}
+            </NavLink>
+
+            <NavLink to="/manufacturer-inventory" className={navLinkStyle}>
+              {({ isActive }) => (
+                <>
+                  <svg className={iconStyle(isActive)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                  <span>Multi-Hub Stock Monitor</span>
+                </>
+              )}
+            </NavLink>
+          </nav>
+        </div>
+
         {/* SECTION 3: FINANCE & ACCOUNTING */}
         <div>
           <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
@@ -271,7 +323,7 @@ const Sidebar = () => {
                   <svg className={iconStyle(isActive)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                   </svg>
-                  <span>COGS &amp; Landed Costs</span>
+                  <span>COGS &amp; Manufacturer Margins</span>
                 </>
               )}
             </NavLink>

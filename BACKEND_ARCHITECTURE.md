@@ -154,4 +154,57 @@ Accounting & Finance (large module)
 - Add Redis caching for product lists and session-like data (optional)
 - Add unit and integration tests for critical flows (auth, payments, stock adjustments)
 
+5. Distributed Manufacturing & Logistics Engine (New Subdomain)
+- Middleware:
+  - `middleware/manufacturerAuth.js`: Verifies JWT with `role: "manufacturer"` and injects `req.manufacturerId`.
+  - `middleware/deliveryAuth.js`: Verifies JWT with `role: "delivery_partner"` and injects `req.deliveryPartnerId`.
+
+- Routes & Controllers:
+  - **Manufacturer Endpoints (`/api/manufacturer`)**:
+    - `POST /login`: Manufacturer authentication with JWT.
+    - `GET /profile`: Fetch manufacturer profile and stats.
+    - `PUT /availability`: Toggle receiving new orders (`isAvailable`).
+    - `POST /admin/register`: Register a new manufacturer hub (Admin only).
+    - `GET /admin/list`: List all manufacturers across Nepal (Admin only).
+    - `PUT /admin/quality/:id`: Update quality rating & feedback (Admin only).
+    - `PUT /admin/contract/:id`: Update contract status and start/end dates (Admin only).
+    - `POST /admin/contract-upload/:id`: Upload signed contract PDF to Cloudinary (Admin only).
+
+  - **Delivery Partner Endpoints (`/api/delivery-partner`)**:
+    - `POST /login`: Courier driver authentication.
+    - `GET /profile`: Profile, vehicle info, and delivery counter.
+    - `PUT /availability`: Toggle duty status.
+    - `POST /admin/register`: Register new delivery partner (Admin only).
+    - `GET /admin/list`: List all delivery partners (Admin only).
+
+  - **Manufacturer Inventory Endpoints (`/api/manufacturer-inventory`)**:
+    - `GET /my`: Get current manufacturer's physical stock, reserved stock, available quantity, and threshold alerts.
+    - `POST /update`: Update stock level, threshold, and audit notes.
+    - `GET /admin/all`: Aggregate multi-hub stock breakdown per product (Admin only).
+
+  - **Order Assignment & Allocation Engine (`/api/order-assignment`)**:
+    - `POST /assign/:orderId`: Smart proximity engine assigns order to nearest available manufacturer with stock (`availableQty >= orderedQty`) and high quality rating.
+    - `GET /my`: Get assigned orders for logged-in manufacturer.
+    - `POST /accept/:id`: Manufacturer accepts order into production.
+    - `POST /reject/:id`: Manufacturer declines order -> triggers automatic re-allocation to next closest hub.
+    - `PUT /status/:id`: Update status (`preparing`, `packaged`) and attach package weight/dimensions.
+    - `GET /admin/all`: Live assignment pipeline monitor.
+    - `POST /admin/manual-assign`: Manual hub routing override.
+
+  - **Delivery Job Endpoints (`/api/delivery-job`)**:
+    - `POST /ready-for-pickup/:assignmentId`: Manufacturer marks parcel ready -> triggers auto-dispatch of local delivery driver.
+    - `GET /my`: Delivery partner runs and tasks.
+    - `POST /accept/:jobId`: Courier accepts run -> unlocks customer street address.
+    - `PUT /status/:jobId`: Courier updates status (`picked_up`, `in_transit`).
+    - `POST /deliver/:jobId`: Mark delivered, confirm COD collection, upload proof of delivery photo.
+    - `POST /fail/:jobId`: Report delivery failure with reason.
+
+6. Security & Infrastructure Notes
+- CORS Origins configured in `server.js` for:
+  - Customer Storefront: `http://localhost:5173`
+  - Admin Portal: `http://localhost:5174`
+  - Manufacturer Portal: `http://localhost:5175`
+  - Delivery Partner Portal: `http://localhost:5176`
+- Role-based access control via JWT claims (`user`, `admin`, `manufacturer`, `delivery_partner`).
+
 -- End of BACKEND_ARCHITECTURE.md --

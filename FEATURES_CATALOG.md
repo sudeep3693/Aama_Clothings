@@ -95,4 +95,34 @@ Legend
 - Requirements: Seed script, prisma migrations, dev scripts (npm run dev), README with setup
 - Acceptance criteria: repo can be bootstrapped locally using README steps
 
+11. Distributed Manufacturer Portal (manufacturer/)
+- Status: Implemented
+- Requirements: Dedicated Vite+React portal on port 5175 for manufacturers to receive auto-assigned orders, accept/decline jobs, manage local production workflow, set packaging specifications, manage localized fabric/garment stock, and view master agreement.
+- Acceptance criteria: Manufacturer can log in, view live assigned orders for their city, accept/reject, mark preparing/packaged/ready_for_pickup, update stock levels, and download signed contract PDF.
+- Dependencies: manufacturerController, orderAssignmentController, manufacturerInventoryController, Manufacturer, ManufacturerInventory, OrderAssignment models.
+
+12. Delivery Partner Fleet Portal (delivery/)
+- Status: Implemented
+- Requirements: Dedicated Vite+React portal on port 5176 for courier drivers to receive pickup notifications, accept runs, view protected customer addresses upon acceptance, record COD cash collections, upload proof of delivery photos, and track earnings.
+- Acceptance criteria: Delivery partner can log in, toggle duty status, accept runs, confirm package pickup from hub, mark delivered with COD check and recipient confirmation, and reconcile cash on hand.
+- Dependencies: deliveryPartnerController, deliveryJobController, DeliveryPartner, DeliveryJob models.
+
+13. Proximity-Based Order Allocation Engine
+- Status: Implemented
+- Requirements: Automatically matches new customer orders to the nearest qualified manufacturer hub in Nepal with sufficient available stock and highest quality rating. Re-allocates if rejected.
+- Acceptance criteria: On COD or online order placement, engine executes and pairs the order with optimal manufacturer; supports admin manual re-routing override.
+- Dependencies: backend/controllers/orderAssignmentController.js (`runAllocationEngine`).
+
+14. Master Manufacturing Agreement & Quality Governance
+- Status: Implemented
+- Requirements: Enforce legal contract status (ACTIVE, PENDING, EXPIRED, TERMINATED), validity dates, commission rates, and signed contract document uploads (PDF/image) stored on Cloudinary. Quality auditing from 1.0 to 5.0 stars.
+- Acceptance criteria: Admin can upload PDF contracts, audit quality rating, and view manufacturer compliance status.
+- Dependencies: manufacturerController, Multer, Cloudinary, Manufacturer model.
+
+15. Multi-Hub Network Stock Monitoring
+- Status: Implemented
+- Requirements: Central admin cockpit to inspect aggregate catalog stock across Nepal as well as granular breakdown across individual manufacturer warehouses.
+- Acceptance criteria: Admin can view total network stock, reserved units for active orders, available units to sell, and drill down into per-hub quantities with low-stock alerts.
+- Dependencies: manufacturerInventoryController, ManufacturerInventory model.
+
 -- End of FEATURES_CATALOG.md --
