@@ -1,201 +1,260 @@
-# SCHEMA.md
+# DATABASE_SCHEMA.md — Single Source of Truth for Database Architecture
 
-Repository path: backend/prisma/schema.prisma
+**Repository Path**: `backend/prisma/schema.prisma`  
+**Database System**: MySQL 8.0  
+**ORM Engine**: Prisma Client (`@prisma/client`)  
+**Total Active Prisma Models**: 39  
+**Last Updated**: September 14, 2026  
 
-This document describes the database schema as implemented in backend/prisma/schema.prisma (Prisma / MySQL). It lists models, fields, types, primary/unique constraints, relations, indexes and pragmatic notes about JSON fields and validation rules observed in application controllers.
+---
 
--- Summary --
-- Primary database: MySQL via Prisma (datasource provider = "mysql").
-- Many models use JSON columns for flexible compound data (images, variants, cartData, addresses).
-- Several accounting and finance models form a financial subdomain (JournalEntry, JournalLine, Account, FiscalYear, etc.).
-- Some relations are modeled explicitly with Prisma relations; many refer to other entities by raw ID (String) and are treated as foreign keys at application level.
+## Executive Overview
 
---- Models (alphabetical) ---
+The database schema forms the relational core of the **Aama Clothings** Enterprise E-Commerce platform, powering consumer shopping, automated order allocation, regional factory dispatch, courier logistics, 13% Nepal VAT compliance, operating expense management, and double-entry GAAP/IFRS financial accounting.
 
-User
-- Table: User
-- Primary Key: id (String, uuid)
-- Fields:
-  - id: String @id @default(uuid())
-  - firstName: String? @default("")
-  - lastName: String? @default("")
-  - phone: String? @default("")
-  - name: String (full name)
-  - email: String @unique (lowercased by controller)
-  - password: String (bcrypt hash)
-  - cartData: Json @default("{}") — cart stored as JSON map { productId: { variantKey: qty } }
-  - addresses: Json @default("[]") — array of address objects
-- Observed constraints/validation:
-  - email uniqueness enforced by DB and controller validates format (validator.isEmail).
-  - password minimum length enforced at registration (>=8) and stored hashed.
-  - controllers parse JSON fields defensively (parseJsonArray) and limit addresses to 5.
+### Schema Maintenance Policy
+> [!IMPORTANT]
+> This single file (`SCHEMA.md`) is the authoritative reference for the database schema. Any changes to `backend/prisma/schema.prisma` must be reflected directly in this document.
 
-Product
-- Table: Product
-- Primary Key: id (String, uuid)
-- Fields:
-  - id, name (String)
-  - description: String @db.Text
-  - price: Float
-  - image: Json (array of image URLs)
-  - category: String (stringified JSON array in controllers, stored as string)
-  - subCategory: String
-  - sizes: Json
-  - colors: Json @default("[]")
-  - variants: Json @default("[]") — variant objects include size, color, quantity, SKU
-  - bestseller: Boolean @default(false)
-  - newInStore: Boolean @default(false)
-  - isSpecialOffer, offerTag, offerEndDate, discount, costPrice, stockQuantity, lowStockThreshold, published, date (BigInt)
-- Observed constraints/validation:
-  - Controllers normalize categories and JSON-parsed fields; price/discount/costPrice coercions applied.
-  - When newInStore is set true, code enforces uniqueness by unsetting others (application-level exclusivity).
-  - published determines public visibility; listing endpoints filter by published unless admin.
-  - Images are uploaded to Cloudinary and stored as secure URLs in image JSON.
+### Unused Schema Removals & Clean-Up
+1. **Removed Unused Table**: `MonthlyExpense` (dropped; fully superseded by `OperatingExpense`).
+2. **Removed Deprecated Column**: `Manufacturer.commissionRate` (dropped; manufacturer partners operate strictly on 100% Agreed Supply COGS).
+3. **Optimized B-Tree Indexes**: Added secondary indexes across high-traffic query targets (`Order`, `CashTransaction`, `Product`, `AccountPayable`, `AccountReceivable`, `OperatingExpense`).
 
-Order
-- Table: Order
-- Primary Key: id (String, uuid)
-- Fields: userId (String), items (Json), amount (Float), address (Json), status (String @default("Order Placed")), paymentMethod (String), payment (Boolean), date (BigInt), loyaltyDiscount Float?, rewardApplied Json?
-- Observed:
-  - Items stored as JSON; payment booleans and paymentMethod tracked. Controller and admin logic use order.status lifecycle.
+---
 
-Category / SubCategory / Color
-- Simple lookup tables with id (uuid) and name (unique).
+## Domain Entity Model Catalog
 
-Review
-- Table: Review
-- Primary Key: id
-- Fields: productId, userId, userName, userEmail, rating (Int), title, comment (Text), likes/dislikes Json arrays, verified Boolean, date BigInt
-- Observed:
-  - Used to compute product ratings in controllers; review aggregation is done in-memory for endpoints.
+### 1. E-Commerce Storefront & Order Domain
 
-ShippingConfig
-- Singleton-like configuration model with id default "default" and fees, freeShippingMin, updatedAt @updatedAt
+#### `User`
+- **Primary Key**: `id` (UUID)
+- **Fields**:
+  - `id`: String `@id @default(uuid())`
+  - `firstName`: String? `@default("")`
+  - `lastName`: String? `@default("")`
+  - `phone`: String? `@default("")`
+  - `name`: String
+  - `email`: String `@unique`
+  - `password`: String (Bcrypt Hash)
+  - `cartData`: Json `@default("{}")`
+  - `addresses`: Json `@default("[]")`
 
-CustomerLevel, CustomerLetterImage, SpecialOffer
-- Customer loyalty and marketing models; CustomerLevel contains reward configuration fields (minSpend, minOrders, rewardType, etc.)
-- SpecialOffer tracks active promotions and productIds as JSON array
+#### `Product`
+- **Primary Key**: `id` (UUID)
+- **Fields**:
+  - `id`: String `@id @default(uuid())`
+  - `name`: String
+  - `description`: String `@db.Text`
+  - `price`: Float
+  - `image`: Json
+  - `category`: String
+  - `subCategory`: String
+  - `sizes`: Json
+  - `colors`: Json `@default("[]")`
+  - `variants`: Json `@default("[]")`
+  - `bestseller`: Boolean `@default(false)`
+  - `newInStore`: Boolean `@default(false)`
+  - `isSpecialOffer`: Boolean `@default(false)`
+  - `offerTag`: String? `@default("")`
+  - `offerEndDate`: DateTime?
+  - `discount`: Float `@default(0)`
+  - `costPrice`: Float `@default(0)` (Manufacturer Agreed COGS)
+  - `stockQuantity`: Int `@default(0)`
+  - `lowStockThreshold`: Int `@default(5)`
+  - `published`: Boolean `@default(true)`
+  - `date`: BigInt (Epoch timestamp ms)
+- **Indexes**:
+  - `@@index([published])`
+  - `@@index([category])`
+  - `@@index([bestseller])`
 
-StockLog
-- Records stock movements: productId, productName, variantLabel, previousQty, newQty, changeQty, reason, orderId?, source, createdAt
-- Used by controllers to log adjustments and initial stock
+#### `Order`
+- **Primary Key**: `id` (UUID)
+- **Fields**:
+  - `id`: String `@id @default(uuid())`
+  - `userId`: String
+  - `items`: Json
+  - `amount`: Float
+  - `address`: Json
+  - `status`: String `@default("Order Placed")`
+  - `paymentMethod`: String
+  - `payment`: Boolean `@default(false)`
+  - `date`: BigInt
+  - `loyaltyDiscount`: Float? `@default(0)`
+  - `rewardApplied`: Json?
+  - `fulfillmentStatus`: String `@default("PENDING_ASSIGNMENT")`
+  - `assignmentId`: String?
+  - `deliveryJobId`: String?
+  - `orderType`: String `@default("ONLINE_STORE")`
+  - `directOrderType`: String? `@default("")`
+  - `manufacturerId`: String?
+  - `directNotes`: String? `@db.Text`
+- **Indexes**:
+  - `@@index([fulfillmentStatus])`
+  - `@@index([userId])`
+  - `@@index([orderType])`
+  - `@@index([manufacturerId])`
+  - `@@index([date])`
+  - `@@index([status])`
+  - `@@index([payment])`
 
-InboundShipment, MonthlyExpense
-- Supply chain and cost bookkeeping models, with items stored as JSON arrays
+#### Auxiliary Lookups & Marketing Models
+- **`Category`**: `id` (UUID), `name` (String `@unique`)
+- **`SubCategory`**: `id` (UUID), `name` (String `@unique`)
+- **`Color`**: `id` (UUID), `name` (String `@unique`)
+- **`Review`**: `id`, `productId`, `userId`, `userName`, `userEmail`, `rating` (1-5), `title`, `comment`, `likes`, `dislikes`, `verified`, `date`
+- **`ShippingConfig`**: `id` (`"default"`), `baseCity`, `sameCityFee`, `differentCityFee`, `freeShippingMin`, `updatedAt`
+- **`CustomerLevel`**: `id`, `levelNumber` `@unique`, `name`, `badgeIcon`, `minSpend`, `minOrders`, `rewardType`, `rewardValue`, `freeShipping`, `discountAmount`, `giftAmount`
+- **`CustomerLetterImage`**: `id`, `userId`, `userEmail`, `imageUrl`, `title`, `notes`, `orderId`, `createdAt`
+- **`SpecialOffer`**: `id`, `title`, `subtitle`, `badgeText`, `bannerImage`, `startDate`, `endDate`, `isActive`, `discount`, `productIds`
+- **`StockLog`**: `id`, `productId`, `productName`, `variantLabel`, `previousQty`, `newQty`, `changeQty`, `reason`, `note`, `orderId`, `source`, `createdAt`
+- **`InboundShipment`**: `id`, `batchNumber` `@unique`, `supplierName`, `invoiceNumber`, `carrier`, `shipmentDate`, `totalFreightCost`, `customsOrTaxes`, `totalItemsCost`, `totalLandedCost`, `paidAmount`, `payableAmount`, `paymentStatus`, `items`
+- **`Admin`**: `id`, `email` `@unique`, `password` (Bcrypt), `createdAt`, `updatedAt`
 
-Admin
-- Table: Admin
-- Primary Key: id
-- Fields: email @unique, password (bcrypt), timestamps
-- Observed: Admin login uses AES-decrypted password in transit then bcrypt compare; JWT signed with role: "admin"
+---
 
-Financial + Accounting Subdomain
-- FinancialAccount
-  - id, accountName @unique, accountType, currentBalance, currency, isDefault, status
-  - Relations: outflows and inflows with CashTransaction (@relation names FromAccount and ToAccount)
-- CashTransaction
-  - Fields: fromAccountId, toAccountId, fromAccount/toAccount relations reference FinancialAccount with onDelete: SetNull
-- Account (Chart of Accounts)
-  - Self-relation parentAccount/subAccounts (AccountHierarchy)
-  - Indexes: @@index([accountType]), @@index([parentAccountId])
-- FiscalYear, AccountingPeriod (relation AccountingPeriod.fiscalYear -> FiscalYear)
-  - AccountingPeriod has unique([fiscalYearId, periodName])
-- JournalEntry, JournalLine
-  - JournalEntry has unique journalNumber, several @@index declarations: transactionDate, [sourceType, sourceId], status
-  - JournalLine relates to JournalEntry (onDelete Cascade) and Account (onDelete Restrict); indexes on journalEntryId, accountId, customerId, supplierId
-- CashTransaction, FixedAsset, PartnerEquity, CompanyValuation, ShareTransaction, ProfitDistribution, InvestorLiability, CustomerReturn, SupplierReturn, TaxConfiguration, TaxFilingRecord, AccountPayable, AccountReceivable, Account, FiscalYear, AccountingPeriod, JournalEntry, JournalLine: these models form the finance ledger and reporting domain and contain many JSON fields for histories and schedules.
+### 2. Operating & Overhead Expenses Domain
 
-Indexing (explicit in Prisma schema)
-- Account: @@index([accountType]) and @@index([parentAccountId])
-- JournalEntry: @@index([transactionDate]), @@index([sourceType, sourceId]), @@index([status])
-- JournalLine: @@index([journalEntryId]), @@index([accountId]), @@index([customerId]), @@index([supplierId])
-- AccountingPeriod: @@unique([fiscalYearId, periodName])
+#### `OperatingExpense`
+- **Primary Key**: `id` (UUID)
+- **Fields**:
+  - `id`: String `@id @default(uuid())`
+  - `title`: String
+  - `category`: String (`MARKETING` | `RENT` | `ELECTRICITY` | `SALARIES` | `UTILITIES` | `MISCELLANEOUS` | `MAINTENANCE`)
+  - `amount`: Float (Total expense amount)
+  - `isVatBill`: Boolean `@default(false)`
+  - `vatAmount`: Float `@default(0)` (Embedded 13% Input VAT)
+  - `date`: DateTime `@default(now())`
+  - `paymentMethod`: String (`CASH` | `BANK_TRANSFER` | `QR_PAYMENT` | `CREDIT`)
+  - `vendorName`: String?
+  - `invoiceNumber`: String?
+  - `notes`: String? `@db.Text`
+  - `createdBy`: String `@default("ADMIN")`
+- **Indexes**:
+  - `@@index([category])`
+  - `@@index([date])`
+  - `@@index([isVatBill])`
 
-Pragmatic notes on relations vs. raw IDs
-- Many models store related entity IDs as plain String fields rather than using Prisma relation() syntax. Examples: Order.userId (no explicit relation), Product references in StockLog.productId, Review.productId.
-- A few relations use Prisma relation declarations (e.g., AccountingPeriod -> FiscalYear, JournalLine -> JournalEntry and Account, FinancialAccount -> CashTransaction).
-- Application code often performs lookups manually (prisma.product.findUnique / prisma.user.findUnique) by ID.
+---
 
-JSON fields and usage patterns
-- cartData (User.cartData): controller treats as nested mapping { productId: { variantKey: quantity } } and uses structuredClone when mutating.
-- addresses (User.addresses): an array of address objects; controllers limit number of saved addresses to 5.
-- product.image, product.variants, product.sizes, product.colors: stored as Json and normalized via helper functions to arrays before use.
-- SpecialOffer.productIds: array of product IDs as Json
+### 3. Distributed Manufacturing & Delivery Logistics Hub Domain
 
-Timestamps and date representations
-- Many models use DateTime fields with defaults (now()) for createdAt/updatedAt.
-- Some models use BigInt for epoch milliseconds (e.g., Product.date, Review.date, Order.date). Controllers convert BigInt to Number when returning JSON.
+#### `Manufacturer`
+- **Primary Key**: `id` (UUID)
+- **Fields**:
+  - `id`: String `@id @default(uuid())`
+  - `name`: String
+  - `email`: String `@unique`
+  - `password`: String (Bcrypt)
+  - `phone`: String
+  - `city`: String (Regional city hub: Kathmandu, Pokhara, Biratnagar, etc.)
+  - `address`: String? `@db.Text`
+  - `qualityRating`: Float `@default(5.0)`
+  - `ratingCount`: Int `@default(0)`
+  - `isActive`: Boolean `@default(true)`
+  - `isAvailable`: Boolean `@default(true)`
+  - `contractStatus`: String `@default("ACTIVE")`
+  - `contractDocUrl`: String? `@db.Text`
+  - `contractStartDate`: DateTime?
+  - `contractExpiryDate`: DateTime?
+  - `agreementNotes`: String? `@db.Text`
+  - `totalOrdersFulfilled`: Int `@default(0)`
+  - `onTimeCount`: Int `@default(0)`
+  - `defectCount`: Int `@default(0)`
+  - `rejectionCount`: Int `@default(0)`
+- **Indexes**:
+  - `@@index([city])`
+  - `@@index([isActive, isAvailable])`
 
-Validation and business rules (observed in controllers)
-- User registration: email validated via validator.isEmail; password length >= 8; phone length >= 7 optional.
-- Login: client encrypts password with AES and server decrypts using AES_SECRET_KEY (decryptAES utility), then bcrypt compare.
-- Product creation/update: images upload to Cloudinary; category normalized to array and stored as JSON string; if newInStore true, other products set to false (application-level uniqueness requirement).
-- Stock: variants may include per-variant quantity; adjustStock handles both variant-level adjustments and product-level adjustments and writes StockLog entries; controllers ensure stock never drops negative (Math.max(0,...)).
-- Addresses: saved with id = Date.now().toString(); max 5 addresses enforced.
-- Admin: admin JWT payload contains role "admin" (used by auth middleware).
+#### `ManufacturerInventory`
+- **Primary Key**: `id` (UUID)
+- **Fields**:
+  - `id`: String `@id @default(uuid())`
+  - `manufacturerId`: String
+  - `productId`: String
+  - `productName`: String
+  - `quantity`: Int `@default(0)`
+  - `reservedQty`: Int `@default(0)`
+  - `variantsStock`: Json `@default("[]")`
+  - `proposedCostPrice`: Float?
+  - `agreedCostPrice`: Float?
+  - `priceStatus`: String `@default("PENDING")`
+  - `priceNote`: String? `@db.Text`
+  - `adminFeedback`: String? `@db.Text`
+- **Constraints**:
+  - `@@unique([manufacturerId, productId])`
+- **Indexes**:
+  - `@@index([productId])`
+  - `@@index([manufacturerId])`
 
-Foreign key behaviors and referential integrity
-- Where Prisma relations exist, onDelete behavior varies: Cascade for JournalLine -> JournalEntry; SetNull for CashTransaction -> FinancialAccount. For raw ID references, enforcement is at application level — consider adding foreign key constraints or Prisma relations for stronger integrity if desired.
+#### `OrderAssignment`
+- **Primary Key**: `id` (UUID)
+- **Fields**: `id`, `orderId` `@unique`, `manufacturerId`, `status` (`PENDING_ACCEPTANCE` | `ACCEPTED` | `MANUFACTURING` | `QUALITY_CHECK` | `PACKED` | `READY_FOR_PICKUP` | `PICKED_UP` | `REJECTED`), `assignedAt`, `acceptedAt`, `readyAt`, `pickedUpAt`, `rejectionReason`
 
-Caching layer
-- No Redis or caching layer found in repository. If introducing Redis, suggested key patterns:
-  - product:{id} => product JSON (ttl: 5–60 minutes for product lists)
-  - product:list:published => sorted set or cache for homepage
-  - user:{id}:cart => cartData JSON (short TTL + write-through on cart update)
-  - stocklog:product:{id}:recent => list (LRANGE) for recent movements
+#### `DeliveryPartner` & `DeliveryJob`
+- **`DeliveryPartner`**: `id`, `name`, `email` `@unique`, `password`, `phone`, `city`, `vehicleType`, `licenseNumber`, `isActive`, `isAvailable`, `rating`, `totalDeliveries`, `onTimeDeliveries`, `failedDeliveries`
+- **`DeliveryJob`**: `id`, `assignmentId` `@unique`, `deliveryPartnerId`, `orderId`, `pickupCity`, `dropoffCity`, `status` (`ASSIGNED` | `ACCEPTED` | `AT_PICKUP` | `PICKED_UP` | `IN_TRANSIT` | `DELIVERED` | `FAILED`), `codAmount`, `codCollected`, `proofOfDelivery`, `deliveredAt`
 
-Suggested indexes (not present but recommended)
-- Product(published, date) composite index for fast listing
-- Product(category) or a join table if categories are heavily queried (currently category stored as string/JSON)
-- Review(productId, rating) index for efficient aggregation
-- Order(userId, date) index for fetching user order history
+---
 
-Migration note
-- Prisma datasource uses MySQL (DATABASE_URL). Despite README and presence of a mongodb config file (backend/config/mongodb.js), controllers use prisma throughout. The project appears migrated from Mongo/Mongoose to Prisma/MySQL; confirm DB provider before deploying.
+### 4. Double-Entry Accounting & Financial Ledger Subdomain
 
-Data access patterns
-- Controllers query prisma.*.findUnique and findMany frequently, then post-process JSON fields.
-- Aggregation (e.g., average rating) is done in-memory by the API (findMany reviews then compute ratings). For scale, consider DB-level aggregation queries or materialized counters on the product row.
+#### `Account` (Chart of Accounts)
+- **Primary Key**: `id` (UUID)
+- **Fields**: `id`, `accountCode` `@unique`, `accountName`, `accountType` (`ASSET` | `LIABILITY` | `EQUITY` | `REVENUE` | `EXPENSE`), `normalBalance` (`DEBIT` | `CREDIT`), `parentAccountId`, `currentBalance`, `isSystemAccount`
+- **Indexes**:
+  - `@@index([accountType])`
+  - `@@index([parentAccountId])`
 
-Security-sensitive fields
-- Passwords (User.password, Admin.password): bcrypt-hashed
-- AES_SECRET_KEY used to decrypt client-sent encrypted password payloads — ensure AES_SECRET_KEY is strong and not leaked.
+#### `JournalEntry` & `JournalLine`
+- **`JournalEntry`**: `id`, `journalNumber` `@unique`, `transactionDate`, `fiscalYearId`, `accountingPeriodId`, `sourceType`, `sourceId`, `idempotencyKey` `@unique`, `totalDebit`, `totalCredit`, `status` (`POSTED` | `REVERSED`)
+- **`JournalLine`**: `id`, `journalEntryId`, `accountId`, `debit`, `credit`, `description`, `customerId`, `supplierId`, `productId`
+- **Indexes**:
+  - `JournalEntry`: `@@index([transactionDate])`, `@@index([sourceType, sourceId])`, `@@index([status])`
+  - `JournalLine`: `@@index([journalEntryId])`, `@@index([accountId])`
 
-Distributed Manufacturing & Logistics Domain (Models)
-- Manufacturer
-  - Table: Manufacturer
-  - Primary Key: id (String, uuid)
-  - Fields: businessName, email @unique, password (bcrypt), phone, address, city, isAvailable (Boolean @default(true)), qualityRating (Float @default(5.0)), qualityNotes (Text?), contractStatus (String @default("ACTIVE")), contractDocUrl (String?), contractStart (DateTime?), contractEnd (DateTime?), commissionRate (Float @default(12.0)), totalOrdersHandled (Int @default(0)), createdAt, updatedAt
-  - Relations: inventories (ManufacturerInventory[]), assignments (OrderAssignment[])
+#### Treasury & Cash Flow Models
+- **`FinancialAccount`**: `id`, `accountName` `@unique`, `accountType` (`CASH` | `BANK` | `WALLET` | `ESCROW`), `currentBalance`, `currency`, `isDefault`, `status`
+- **`CashTransaction`**: `id`, `date`, `amount`, `type` (`INFLOW` | `OUTFLOW` | `TRANSFER`), `fromAccountId`, `toAccountId`, `category` (`SALES` | `SUPPLIER_PAYMENT` | `EXPENSE` | `CAPITAL_INJECTION` | `DRAWINGS` | `LOAN_DISBURSEMENT` | `LOAN_REPAYMENT` | `ASSET_PURCHASE` | `REFUND` | `INTERNAL_TRANSFER`), `partyName`, `invoiceNumber`
+  - **Indexes**: `@@index([date])`, `@@index([category])`, `@@index([type])`
 
-- ManufacturerInventory
-  - Table: ManufacturerInventory
-  - Primary Key: id (String, uuid)
-  - Fields: manufacturerId, productId, quantity (Int @default(0)), reservedQty (Int @default(0)), lowStockThreshold (Int @default(5)), restockNote (String?), createdAt, updatedAt
-  - Constraints: @@unique([manufacturerId, productId])
-  - Relations: manufacturer (Manufacturer), product (Product)
+#### Capital, Debt & Tax Compliance Models
+- **`FixedAsset`**: Fixed asset cost tracking, WDV/Straight-line depreciation, purchase date, accumulated depreciation, book value.
+- **`PartnerEquity`**: Cap table partner shares, ownership %, initial capital, current capital, drawings.
+- **`CompanyValuation`**: Round name, pre/post-money valuation, total shares, share price.
+- **`ShareTransaction`**: Primary issuance / secondary equity transfers.
+- **`ProfitDistribution`**: Fiscal year net profit breakdown, 20% retained earnings reinvestment, partner dividend payouts.
+- **`InvestorLiability`**: Loan principal, interest APR, monthly EMI schedule, outstanding balance.
+- **`CustomerReturn` & `SupplierReturn`**: Customer refund processing (restock vs write-off) & supplier credit notes.
+- **`TaxConfiguration` & `TaxFilingRecord`**: IRD Nepal 13% VAT filing logs, taxable sales/purchases, output/input VAT, net VAT payable.
+- **`AccountPayable` & `AccountReceivable`**: Unpaid vendor invoices & customer receivables.
+  - **Indexes**: `@@index([status])`, `@@index([dueDate])`, `@@index([category])`
 
-- OrderAssignment
-  - Table: OrderAssignment
-  - Primary Key: id (String, uuid)
-  - Fields: orderId @unique, manufacturerId, status (String @default("assigned")), declineReason (String?), packagingNotes (String?), packageWeight (String?), packageDimensions (String?), assignedAt, acceptedAt, packagedAt, deliveredAt, createdAt, updatedAt
-  - Relations: order (Order), manufacturer (Manufacturer), deliveryJob (DeliveryJob?)
+---
 
-- DeliveryPartner
-  - Table: DeliveryPartner
-  - Primary Key: id (String, uuid)
-  - Fields: name, email @unique, password (bcrypt), phone, city, vehicleType (String @default("BIKE")), isAvailable (Boolean @default(true)), totalDeliveries (Int @default(0)), createdAt, updatedAt
-  - Relations: jobs (DeliveryJob[])
+## Entity Relationship Topology
 
-- DeliveryJob
-  - Table: DeliveryJob
-  - Primary Key: id (String, uuid)
-  - Fields: orderAssignmentId @unique, deliveryPartnerId, status (String @default("assigned")), pickupAddress (Text?), deliveryAddress (Text?), codAmount (Float @default(0)), isCodCollected (Boolean @default(false)), proofOfDelivery (String?), recipientName (String?), deliveryNotes (Text?), failureReason (String?), assignedAt, pickedUpAt, deliveredAt, createdAt, updatedAt
-  - Relations: orderAssignment (OrderAssignment), deliveryPartner (DeliveryPartner)
+```mermaid
+erDiagram
+    User ||--o{ Order : places
+    Product ||--o{ ManufacturerInventory : stocked_at
+    Manufacturer ||--o{ ManufacturerInventory : manages
+    Manufacturer ||--o{ OrderAssignment : assigned
+    Order ||--|| OrderAssignment : routed_to
+    OrderAssignment ||--|| DeliveryJob : dispatches
+    DeliveryPartner ||--o{ DeliveryJob : executes
+    JournalEntry ||--|{ JournalLine : contains
+    Account ||--o{ JournalLine : posted_to
+    FinancialAccount ||--o{ CashTransaction : transacts
+    OperatingExpense ||--|| JournalEntry : auto_posts
+```
 
-Appendix: Quick model map (names only)
-User, Product, Order, Category, SubCategory, Color, Review, ShippingConfig, CustomerLevel, CustomerLetterImage, SpecialOffer, StockLog, InboundShipment, MonthlyExpense, Admin, FinancialAccount, CashTransaction, FixedAsset, PartnerEquity, CompanyValuation, ShareTransaction, ProfitDistribution, InvestorLiability, CustomerReturn, SupplierReturn, TaxConfiguration, TaxFilingRecord, AccountPayable, AccountReceivable, Account, FiscalYear, AccountingPeriod, JournalEntry, JournalLine, Manufacturer, ManufacturerInventory, OrderAssignment, DeliveryPartner, DeliveryJob
+---
 
--- End of SCHEMA.md --
+## Performance & Optimization Guidelines
 
-Note: SCHEMA.md was generated from backend/prisma/schema.prisma and cross-verified against backend/controllers/*.js where relevant.
+1. **JSON Column Defensive Parsing**: Application controllers parse `JSON` fields (`items`, `variants`, `addresses`) using defensive helper fallbacks to guarantee non-breaking execution.
+2. **BigInt Epoch Timestamps**: `Product.date`, `Order.date`, and `Review.date` store 64-bit epoch milliseconds. Controllers auto-serialize `BigInt` to JavaScript Numbers/Strings before sending JSON HTTP responses.
+3. **Double-Entry Balance Constraint**: Every `JournalEntry` requires `totalDebit === totalCredit` before being committed to the ledger.
+4. **Capital Solvency Enforcement**: Outflow operations on `FinancialAccount` require `currentBalance >= transferAmount`, preventing unbacked liquid cash disbursements.

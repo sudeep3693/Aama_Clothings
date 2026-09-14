@@ -41,6 +41,10 @@ model Product {
   lowStockThreshold Int     @default(5)
   published         Boolean @default(true)
   date              BigInt
+
+  @@index([published])
+  @@index([category])
+  @@index([bestseller])
 }
 
 model Order {
@@ -69,6 +73,9 @@ model Order {
   @@index([userId])
   @@index([orderType])
   @@index([manufacturerId])
+  @@index([date])
+  @@index([status])
+  @@index([payment])
 }
 
 model Category {
@@ -252,6 +259,10 @@ model CashTransaction {
   fromAccount   FinancialAccount? @relation("FromAccount", fields: [fromAccountId], references: [id], onDelete: SetNull)
   toAccount     FinancialAccount? @relation("ToAccount", fields: [toAccountId], references: [id], onDelete: SetNull)
   createdAt     DateTime          @default(now())
+
+  @@index([date])
+  @@index([category])
+  @@index([type])
 }
 
 model FixedAsset {
@@ -469,6 +480,10 @@ model AccountPayable {
   settlementHistory Json      @default("[]") // [{ id, date, amount, fromAccountId, accountName, transactionId, notes }]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+
+  @@index([status])
+  @@index([dueDate])
+  @@index([category])
 }
 
 model AccountReceivable {
@@ -488,6 +503,10 @@ model AccountReceivable {
   collectionHistory Json      @default("[]") // [{ id, date, amount, toAccountId, accountName, transactionId, notes }]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+
+  @@index([status])
+  @@index([dueDate])
+  @@index([category])
 }
 
 model Account {
@@ -665,66 +684,9 @@ model OrderAssignment {
   rejectionReason String?
 
   manufacturer    Manufacturer  @relation(fields: [manufacturerId], references: [id])
-  deliveryJob     DeliveryJob?
 
   @@index([orderId])
   @@index([manufacturerId])
-  @@index([status])
-}
-
-// Delivery Partner entity
-model DeliveryPartner {
-  id               String   @id @default(uuid())
-  name             String
-  email            String   @unique
-  password         String   // bcrypt hashed
-  phone            String
-  city             String
-  vehicleType      String?  @default("Motorcycle")
-  licenseNumber    String?
-  isActive         Boolean  @default(true)
-  isAvailable      Boolean  @default(true)
-  rating           Float    @default(5.0)
-  totalDeliveries  Int      @default(0)
-  onTimeDeliveries Int      @default(0)
-  failedDeliveries Int      @default(0)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  deliveryJobs     DeliveryJob[]
-
-  @@index([city])
-  @@index([isActive, isAvailable])
-}
-
-// Delivery job assigned to a DeliveryPartner
-model DeliveryJob {
-  id                String          @id @default(uuid())
-  assignmentId      String          @unique
-  deliveryPartnerId String
-  orderId           String
-  pickupCity        String          // manufacturer's city
-  pickupAddress     String?         @db.Text  // manufacturer address for pickup
-  dropoffCity       String          // customer delivery city
-  dropoffAddress    Json            // full customer address (revealed after accept)
-  status            String          @default("ASSIGNED")
-  // ASSIGNED | ACCEPTED | AT_PICKUP | PICKED_UP | IN_TRANSIT | DELIVERED | FAILED
-  codAmount         Float           @default(0)   // cash to collect from customer
-  codCollected      Boolean         @default(false)
-  proofOfDelivery   String?         // image URL
-  assignedAt        DateTime        @default(now())
-  acceptedAt        DateTime?
-  atPickupAt        DateTime?
-  pickedUpAt        DateTime?
-  inTransitAt       DateTime?
-  deliveredAt       DateTime?
-  failureReason     String?
-
-  assignment        OrderAssignment  @relation(fields: [assignmentId], references: [id])
-  deliveryPartner   DeliveryPartner  @relation(fields: [deliveryPartnerId], references: [id])
-
-  @@index([deliveryPartnerId])
-  @@index([orderId])
   @@index([status])
 }
 
@@ -747,5 +709,6 @@ model OperatingExpense {
 
   @@index([category])
   @@index([date])
+  @@index([isVatBill])
 }
 

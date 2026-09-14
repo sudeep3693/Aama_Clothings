@@ -1,210 +1,152 @@
-# BACKEND_ARCHITECTURE.md
+# BACKEND_ARCHITECTURE.md — Single Source of Truth for System Architecture
 
-Repository path: backend/
+**Repository Path**: `backend/`  
+**Runtime**: Node.js (v20+ ESM)  
+**Framework**: Express.js (v4.x)  
+**Database**: MySQL 8.0 via Prisma ORM  
+**Port**: `4000` (API Gateway)  
+**Last Updated**: September 14, 2026  
 
-This document provides an architectural overview of the backend application, folder structure, core routes/endpoints, middleware, integrations, background jobs, and operational concerns. It is based on code in backend/ (controllers, config, prisma, models, routes, server.js).
+---
 
-1. Architectural summary
-- Runtime: Node.js (ESM), Express
-- ORM: Prisma (MySQL) — backend/prisma/schema.prisma
-- Pattern: Modular MVC-like controllers and route handlers. Controllers encapsulate business logic; config/ manages infra connectors; middleware/ contains auth and request helpers. Accounting domain uses relational models with explicit Prisma relations.
-- Concurrency: typical HTTP request/response; no explicit job queue in repo (no Bull/Agenda). Background cron-like jobs would be external or added as scripts.
+## System Architecture Overview
 
-2. Folder structure (key files)
-- backend/
-  - server.js (entrypoint)
-  - config/
-    - db.js (PrismaClient + connect logic)
-    - mongodb.js (legacy — not used when Prisma active)
-    - cloudinary config (if present)
-  - controllers/
-    - productController.js, userController.js, orderController.js, cartController.js, categoryController.js, reviewController.js, etc.
-  - models/
-    - productModel.js, userModel.js, orderModel.js (thin wrappers exporting prisma.model)
-  - middleware/
-    - authMiddleware.js (user & admin auth), multer setup for multipart uploads
-  - prisma/
-    - schema.prisma, seed.js
-  - routes/ (may exist mapping endpoints to controllers)
-  - utils/
-    - crypto.js (AES decrypt), helpers
-  - tests/
-    - unit/integration tests (some present for accounting)
+The **Aama Clothings** backend is built as a modular enterprise API gateway managing multi-hub manufacturing allocation, real-time courier logistics, storefront e-commerce, 13% Nepal VAT tax reporting, operating overhead tracking, and double-entry financial accounting.
 
-3. Architectural patterns
-- Controllers: Each controller exports functions for each route. Functions accept (req, res) and use prisma to query/update DB.
-- Models: Adapters that export prisma.* model objects (e.g., export default prisma.product) — used sparingly.
-- Validation: Lightweight validation inside controllers (validator package), manual checks for required fields.
-- Auth: JWT for session tokens; bcrypt for password hashing; AES used for encrypting credentials in transit from client to server.
+```
+                          ┌──────────────────────────┐
+                          │  Customer Web Frontend   │
+                          │   (Port 5173 - React)    │
+                          └─────────────┬────────────┘
+                                        │
+                          ┌─────────────▼────────────┐
+                          │   Admin Control Portal   │
+                          │   (Port 5174 - React)    │
+                          └─────────────┬────────────┘
+                                        │
+     ┌──────────────────────────────────┼──────────────────────────────────┐
+     │                                  │                                  │
+┌────▼─────────────────────┐  ┌─────────▼────────────────┐  ┌───────────────▼──────────┐
+│  Manufacturer Hub Portal │  │  Delivery Driver Portal  │  │  External Payment API    │
+│   (Port 5175 - React)    │  │   (Port 5176 - React)    │  │  (eSewa, Khalti, Stripe) │
+└────────────┬─────────────┘  └─────────┬────────────────┘  └───────────────┬──────────┘
+             │                          │                                   │
+             └──────────────────────────┼───────────────────────────────────┘
+                                        │
+                           ┌────────────▼───────────┐
+                           │   Express API Gateway  │
+                           │      (Port 4000)       │
+                           └────────────┬───────────┘
+                                        │
+       ┌────────────────────────────────┼────────────────────────────────┐
+       │                                │                                │
+┌──────▼─────────────────┐   ┌──────────▼──────────────┐   ┌─────────────▼────────────┐
+│ Proximity Allocation   │   │  13% Nepal VAT Engine   │   │ Double-Entry GL Ledger   │
+│    & Stock Sync        │   │  & IRD Tax Compliance   │   │   & Financial Suite      │
+└──────────────┬─────────┘   └──────────┬──────────────┘   └─────────────┬────────────┘
+               │                        │                                │
+               └────────────────────────┴────────────────────────────────┘
+                                        │
+                           ┌────────────▼───────────┐
+                           │  MySQL 8.0 via Prisma  │
+                           └────────────────────────┘
+```
 
-4. Core API routes and endpoints (mapped from controllers)
-Note: some route files map these controllers under /api or /admin prefixes. Examine backend/routes for exact path wiring.
+---
 
-User/Auth
-- POST /api/user/register
-  - Input: { firstName, lastName, name?, email, phone?, password (AES-decrypted at server) }
-  - Output: { success, token, user } on success
-  - Status codes: 200 (success), 400/200 with success:false (controllers return JSON error payloads instead of proper HTTP codes)
-- POST /api/user/login
-  - Input: { email, encryptedPassword, iv }
-  - Output: { success, token, user }
-- POST /api/user/profile (get)
-  - Input: { userId }
-  - Output: { success, user }
-- POST /api/user/update
-  - Input: { userId, firstName, lastName, phone }
-- POST /api/user/change-password
-  - Input: { userId, currentPassword, newPassword }
-- Admin login: POST /api/admin/login
-  - Input: { email, encryptedPassword, iv }
-  - Output: { success, token }
+## Client Portal Topology & Security Matrix
 
-Products
-- POST /api/product/add (Admin)
-  - Multipart form-data: images, and JSON fields (name, price, category, variants, stockQuantity, published, etc.)
-  - Side-effects: uploads images to Cloudinary, writes Product and StockLog entries.
-- POST /api/product/update
-  - Input: product id + fields to update (supports image replacement)
-- POST /api/product/toggle-publish
-  - Input: { id }
-- GET/POST /api/product/list
-  - Input: optional admin param to bypass published filter
-  - Output: products array with derived fields (rating, reviewCount, categories array)
-- POST /api/product/single
-  - Input: { productId }
-  - Output: detailed product including rating and reviewCount
-- POST /api/product/adjust-stock
-  - Input: { productId, adjustments: [{size?, color?, quantity}], reason, note, source }
-  - Transaction: updates Product.variants or Product.stockQuantity, and creates StockLog entries.
-- DELETE /api/product/remove
-  - Input: { id }
+| Portal Role | Client Origin | Primary Middleware | Auth Token Type | Responsibilities |
+|---|---|---|---|---|
+| **Customer Storefront** | `http://localhost:5173` | `auth.js` | User JWT | Product catalog, cart management, checkout, reviews, order tracking |
+| **Admin Portal** | `http://localhost:5174` | `adminAuth.js` | Admin JWT | Financial reporting, expense management, user cap table, tax compliance, partner creation |
+| **Manufacturer Hub** | `http://localhost:5175` | `manufacturerAuth.js` | Manufacturer JWT | Hub order acceptance, stock sync, manufacturing progress, packaging |
+| **Delivery Partner** | `http://localhost:5176` | `deliveryAuth.js` | Delivery Driver JWT | Parcel pickup, route acceptance, COD collection, proof of delivery photo upload |
 
-Cart
-- POST /api/cart/add
-  - Input: { userId, itemId, size, color }
-  - Stores to User.cartData JSON
-- POST /api/cart/update
-  - Input: { userId, itemId, size, color, quantity }
-- POST /api/cart/get
-  - Input: { userId }
+---
 
-Orders
-- POST /api/order/create
-  - Input: { userId, items, amount, address, paymentMethod, payment details }
-  - Behavior: creates Order record, adjusts stock, writes ledger entries (accounting controllers exist), returns order confirmation
-- GET /api/order/list
-  - Input: filtering by user or admin
-- POST /api/order/single
-  - Input: { orderId }
+## Core Domain Engine Architecture
 
-Categories
-- POST /api/category/add
-  - Input: { name }
-- GET /api/category/list
-  - Seeds default categories ["Men","Women","Kids"] when empty
-- DELETE /api/category/remove
-  - Input: { id }
+### 1. Proximity Allocation & Stock Synchronization Engine
+- **Files**: [`backend/controllers/orderAssignmentController.js`](file:///c:/Users/user/Desktop/Sudeep%20Subedi/projects/Clothes-Store-ECommerce/backend/controllers/orderAssignmentController.js), [`backend/services/stockSyncService.js`](file:///c:/Users/user/Desktop/Sudeep%20Subedi/projects/Clothes-Store-ECommerce/backend/services/stockSyncService.js)
+- **Algorithm**:
+  1. When an order is placed, candidate regional factory hubs (`Manufacturer`) are evaluated based on city proximity, active contract status (`contractStatus === 'ACTIVE'`), hub availability, and physical inventory (`quantity - reservedQty >= orderedQty`).
+  2. Scores candidate hubs via:
+     $$\text{Score} = (\text{Proximity Weight}) + (\text{Quality Rating} \times 20) - (\text{Pending Workload} \times 5)$$
+  3. Automatically reserves hub stock (`reservedQty += itemQty`) and assigns the order to the optimal manufacturer hub.
+  4. Real-time background service `syncProductStockFromManufacturerInventory(productId)` aggregates physical inventory across all regional hubs and updates the global `Product.stockQuantity` and variant stock maps.
 
-Reviews
-- POST /api/review/add
-  - Input: { productId, userId, rating, comment, title? }
-  - Behavior: stores Review; controllers recompute ratings at read time
+### 2. Operating & Overhead Expense Engine
+- **File**: [`backend/controllers/expenseController.js`](file:///c:/Users/user/Desktop/Sudeep%20Subedi/projects/Clothes-Store-ECommerce/backend/controllers/expenseController.js)
+- **Features**:
+  - Full CRUD operations for operating costs across categories: `MARKETING`, `RENT`, `ELECTRICITY`, `SALARIES`, `UTILITIES`, `MAINTENANCE`, `MISCELLANEOUS`.
+  - Supports 13% Nepal VAT bill toggle (`isVatBill`), automatically splitting the total expense into **Taxable Net Expense** (`Amount / 1.13`) and **Claimable Input VAT Credit** (`Amount * 13 / 113`).
+  - Auto-posts double-entry general ledger journal entries to the Chart of Accounts via `postExpenseAccounting`.
 
-Accounting & Finance (large module)
-- Controllers: accountingController, financialController, cogsController, accountingPostingEngine
-- Endpoints: create journal entries, retrieve ledgers, post cash transactions, generate period reports
-- Important models: JournalEntry, JournalLine, FinancialAccount, CashTransaction, Account, FiscalYear
+### 3. 13% Nepal VAT & IRD Tax Compliance Engine
+- **Files**: [`backend/controllers/financialController.js`](file:///c:/Users/user/Desktop/Sudeep%20Subedi/projects/Clothes-Store-ECommerce/backend/controllers/financialController.js), [`backend/controllers/taxComplianceController.js`](file:///c:/Users/user/Desktop/Sudeep%20Subedi/projects/Clothes-Store-ECommerce/backend/controllers/taxComplianceController.js)
+- **Nepal VAT Law Compliance**:
+  - **Output VAT Collected**: E-commerce retail sales prices include 13% Nepal VAT:
+    $$\text{Taxable Sales Base} = \frac{\text{Gross Revenue}}{1.13}, \quad \text{Output VAT} = \text{Gross Revenue} - \text{Taxable Sales Base}$$
+  - **Input VAT Credit (Purchases & COGS)**: Manufacturer-agreed COGS and overhead expenses with VAT bills contain 13% claimable Input VAT Credit:
+    $$\text{Input VAT Credit} = (\text{COGS Inc. VAT} \times \frac{13}{113}) + (\text{Overhead Expenses Inc. VAT} \times \frac{13}{113})$$
+  - **Net Monthly VAT Payable / Credit Carryforward**:
+    $$\text{Net VAT Payable} = \text{Output VAT Collected} - \text{Input VAT Claimable}$$
 
-5. Middleware & Execution Flow
-- Typical middleware stack: express.json(), cors(), auth middleware for protected routes, multer for multipart/form-data
-- Auth middleware verifies JWT using JWT_SECRET; admin middleware checks token role: "admin"
-- Error handling: controllers catch exceptions and respond with { success:false, message:error.message } — status codes are often 200 with success:false. Consider normalizing to proper HTTP status codes.
+### 4. Double-Entry Accounting & Ledger Engine
+- **Files**: [`backend/services/accountingPostingEngine.js`](file:///c:/Users/user/Desktop/Sudeep%20Subedi/projects/Clothes-Store-ECommerce/backend/services/accountingPostingEngine.js), [`backend/controllers/accountingController.js`](file:///c:/Users/user/Desktop/Sudeep%20Subedi/projects/Clothes-Store-ECommerce/backend/controllers/accountingController.js)
+- **Ledger Invariants**:
+  - Every financial transaction automatically generates a balanced `JournalEntry` where `totalDebit === totalCredit`.
+  - Maintains strict Account Hierarchy (Assets `1000`, Liabilities `2000`, Equity `3000`, Revenue `4000`, Expenses `5000`, Operating Expenses `6000`).
 
-6. External integrations
-- Cloudinary (image uploads): used in product controller (cloudinary.uploader.upload)
-- Stripe & Razorpay SDKs included in package.json — checkout flows likely implemented in order/payment controllers
-- Validator library for input validation
-- JSON web tokens (jsonwebtoken) for auth
-- AES encryption: client encrypts the password; server decrypts via decryptAES utility with AES_SECRET_KEY
+### 5. Treasury & Liquid Capital Solvency Engine
+- **File**: [`backend/controllers/financialController.js`](file:///c:/Users/user/Desktop/Sudeep%20Subedi/projects/Clothes-Store-ECommerce/backend/controllers/financialController.js)
+- **Solvency Invariants**:
+  - Tracks liquid cash across Treasury Accounts (`FinancialAccount`: Cash, Bank, Wallet, Escrow).
+  - Outflow payments (supplier payouts, asset purchases, direct expense payments) enforce capital solvency:
+    $$\text{Available Liquid Balance} \ge \text{Transfer Amount}$$
+  - Prevents unbacked disbursements and prompts user to record unpaid disbursements as `AccountPayable`.
 
-7. Background workers & scheduled jobs
-- No job queue found. There are scripts for prisma db seed and a few accounting test scripts. For background tasks (email, reconciliation, periodic reporting), recommended approaches:
-  - Add a cron worker (node-cron) or use external scheduler (e.g., GitHub Actions, Railway cron) for daily reconciliation and ledger closing.
-  - Use a message queue (BullMQ + Redis) for long-running tasks (bulk image processing, order reconciliation, sending emails).
+### 6. Audited Financial Statements Engine (GAAP / IFRS Direct & Indirect Reconciled)
+- **File**: [`backend/controllers/financialController.js`](file:///c:/Users/user/Desktop/Sudeep%20Subedi/projects/Clothes-Store-ECommerce/backend/controllers/financialController.js) (`getFinancialStatements`)
+- **Statements**:
+  1. **Income Statement (P&L)**: Net Sales Revenue, COGS, Gross Profit, Operating Overhead Expenses (OPEX), Non-Cash Depreciation, Net Operating Income (EBT), 25% Corporate Income Tax Estimate, Net Income After Tax.
+  2. **Balance Sheet**: Current Assets (Liquid Treasury Cash, Accounts Receivable, Inventory at Cost), Non-Current Fixed Assets (Gross Cost - Accumulated Depreciation = Net Book Value), Liabilities (Accounts Payable, Investor Debt), Partner Capital, Retained Earnings, Total Equity.
+  3. **Statement of Cash Flows (Direct Method & Indirect Reconciled)**:
+     - **Operating Cash Flows**: Customer Sales Receipts, Supplier COGS Outflows, Overhead Expense Outflows.
+     - **Investing Cash Flows**: Fixed Asset Capital Purchases ONLY (`netInvestingCashFlow = -assetAdditionsInPeriod`). Depreciation is non-cash and excluded.
+     - **Financing Cash Flows**: Partner Capital Injections, Loan Disbursements, Loan Repayments, Partner Drawings.
+     - **Indirect Method Reconciliation**: Net Income After Tax $\rightarrow$ + Non-Cash Depreciation Addback $\rightarrow$ + Working Capital & Cash Tax Adjustments $\rightarrow$ Reconciled Net Operating Cash Flow.
 
-8. Observability & testing
-- Tests: limited tests exist under backend/tests (accountingEngine.test.js, capitalSolvency.test.js)
-- Logging: console.log used; recommend structured logger (pino/winston) for production
-- Metrics/Monitoring: none present; recommended to add basic health endpoints and integrate Prometheus/Grafana or external APM
+---
 
-9. Deployment considerations
-- Environment variables: backend/.env.example lists DATABASE_URL (MySQL), JWT_SECRET, AES_SECRET_KEY, Cloudinary and payment keys, CORS origins.
-- Prisma: commands present for generate, migrate, seed. Use prisma db push/migrate depending on migration strategy.
-- Migration artifact: backend/config/mongodb.js exists; confirm that Mongo is not used in production to avoid confusion.
+## API Route Catalog Summary
 
-10. Security recommendations
-- Return proper HTTP status codes (400/401/403/500) instead of only JSON with success:false
-- Rate-limit authentication endpoints and potentially cart/order endpoints
-- Enforce input sanitization and length limits for JSON fields with large user input (comments, notes)
-- Consider DB-level foreign keys for stronger integrity between core models
+### Storefront & Cart Routes (`/api/product`, `/api/cart`, `/api/order`)
+- `GET /api/product/list`: Public product catalog with published filter.
+- `POST /api/cart/add`, `POST /api/cart/update`: Shopping cart management.
+- `POST /api/order/create`: Customer order placement & allocation dispatch.
 
-11. Next steps for maintainers
-- Standardize response schema and HTTP status codes
-- Replace console logging with structured logger and capture errors centrally
-- Add Redis caching for product lists and session-like data (optional)
-- Add unit and integration tests for critical flows (auth, payments, stock adjustments)
+### Operating Expense Routes (`/api/expense`)
+- `POST /api/expense/create`: Log operating expense with 13% VAT bill toggle.
+- `GET /api/expense/list`: Query expenses by category, date range, search.
+- `PUT /api/expense/update`: Edit expense.
+- `DELETE /api/expense/delete`: Remove expense record.
+- `GET /api/expense/summary`: Aggregate expense breakdown.
 
-5. Distributed Manufacturing & Logistics Engine (New Subdomain)
-- Middleware:
-  - `middleware/manufacturerAuth.js`: Verifies JWT with `role: "manufacturer"` and injects `req.manufacturerId`.
-  - `middleware/deliveryAuth.js`: Verifies JWT with `role: "delivery_partner"` and injects `req.deliveryPartnerId`.
+### Manufacturer Hub Routes (`/api/manufacturer`, `/api/order-assignment`)
+- `POST /api/manufacturer/login`: Hub authentication.
+- `GET /api/order-assignment/my`: Fetch assigned orders for hub.
+- `POST /api/order-assignment/accept/:id`: Accept order into production.
+- `POST /api/order-assignment/reject/:id`: Decline order & trigger auto re-routing.
 
-- Routes & Controllers:
-  - **Manufacturer Endpoints (`/api/manufacturer`)**:
-    - `POST /login`: Manufacturer authentication with JWT.
-    - `GET /profile`: Fetch manufacturer profile and stats.
-    - `PUT /availability`: Toggle receiving new orders (`isAvailable`).
-    - `POST /admin/register`: Register a new manufacturer hub (Admin only).
-    - `GET /admin/list`: List all manufacturers across Nepal (Admin only).
-    - `PUT /admin/quality/:id`: Update quality rating & feedback (Admin only).
-    - `PUT /admin/contract/:id`: Update contract status and start/end dates (Admin only).
-    - `POST /admin/contract-upload/:id`: Upload signed contract PDF to Cloudinary (Admin only).
+### Courier Delivery Routes (`/api/delivery-partner`, `/api/delivery-job`)
+- `POST /api/delivery-job/ready-for-pickup/:assignmentId`: Mark parcel ready for driver pickup.
+- `POST /api/delivery-job/accept/:jobId`: Courier accepts run.
+- `POST /api/delivery-job/deliver/:jobId`: Mark delivered, confirm COD collection, upload POD image.
 
-  - **Delivery Partner Endpoints (`/api/delivery-partner`)**:
-    - `POST /login`: Courier driver authentication.
-    - `GET /profile`: Profile, vehicle info, and delivery counter.
-    - `PUT /availability`: Toggle duty status.
-    - `POST /admin/register`: Register new delivery partner (Admin only).
-    - `GET /admin/list`: List all delivery partners (Admin only).
-
-  - **Manufacturer Inventory Endpoints (`/api/manufacturer-inventory`)**:
-    - `GET /my`: Get current manufacturer's physical stock, reserved stock, available quantity, and threshold alerts.
-    - `POST /update`: Update stock level, threshold, and audit notes.
-    - `GET /admin/all`: Aggregate multi-hub stock breakdown per product (Admin only).
-
-  - **Order Assignment & Allocation Engine (`/api/order-assignment`)**:
-    - `POST /assign/:orderId`: Smart proximity engine assigns order to nearest available manufacturer with stock (`availableQty >= orderedQty`) and high quality rating.
-    - `GET /my`: Get assigned orders for logged-in manufacturer.
-    - `POST /accept/:id`: Manufacturer accepts order into production.
-    - `POST /reject/:id`: Manufacturer declines order -> triggers automatic re-allocation to next closest hub.
-    - `PUT /status/:id`: Update status (`preparing`, `packaged`) and attach package weight/dimensions.
-    - `GET /admin/all`: Live assignment pipeline monitor.
-    - `POST /admin/manual-assign`: Manual hub routing override.
-
-  - **Delivery Job Endpoints (`/api/delivery-job`)**:
-    - `POST /ready-for-pickup/:assignmentId`: Manufacturer marks parcel ready -> triggers auto-dispatch of local delivery driver.
-    - `GET /my`: Delivery partner runs and tasks.
-    - `POST /accept/:jobId`: Courier accepts run -> unlocks customer street address.
-    - `PUT /status/:jobId`: Courier updates status (`picked_up`, `in_transit`).
-    - `POST /deliver/:jobId`: Mark delivered, confirm COD collection, upload proof of delivery photo.
-    - `POST /fail/:jobId`: Report delivery failure with reason.
-
-6. Security & Infrastructure Notes
-- CORS Origins configured in `server.js` for:
-  - Customer Storefront: `http://localhost:5173`
-  - Admin Portal: `http://localhost:5174`
-  - Manufacturer Portal: `http://localhost:5175`
-  - Delivery Partner Portal: `http://localhost:5176`
-- Role-based access control via JWT claims (`user`, `admin`, `manufacturer`, `delivery_partner`).
-
--- End of BACKEND_ARCHITECTURE.md --
+### Finance, Accounting & Tax Compliance Routes (`/api/finance`)
+- `GET /api/finance/dashboard`: High-level executive dashboard metrics.
+- `GET /api/finance/tax-report`: Monthly 13% Nepal VAT & IRD filing report.
+- `GET /api/finance/statements`: P&L Income Statement, Balance Sheet, & Cash Flow Suite.
+- `POST /api/finance/transfer`: Execute treasury transfers and cash outflows.

@@ -336,7 +336,6 @@ const getMyAssignments = async (req, res) => {
         manufacturer: {
           select: { id: true, name: true, city: true, phone: true, qualityRating: true },
         },
-        deliveryJob: true,
       },
     });
 
@@ -475,7 +474,6 @@ const getAllAssignments = async (req, res) => {
       orderBy: { assignedAt: "desc" },
       include: {
         manufacturer: { select: { id: true, name: true, city: true, qualityRating: true } },
-        deliveryJob: { select: { id: true, status: true, deliveryPartnerId: true } },
       },
     });
 

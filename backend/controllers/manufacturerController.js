@@ -332,10 +332,10 @@ const getManufacturerStats = async (req, res) => {
     if (!manufacturer) return res.json({ success: false, message: "Not found" });
 
     const pending = await prisma.orderAssignment.count({
-      where: { manufacturerId, status: "PENDING_ACCEPTANCE" },
+      where: { manufacturerId, status: "assigned" },
     });
     const active = await prisma.orderAssignment.count({
-      where: { manufacturerId, status: { in: ["ACCEPTED", "MANUFACTURING", "QUALITY_CHECK", "PACKED"] } },
+      where: { manufacturerId, status: { in: ["accepted", "preparing", "packaged", "ready_for_pickup"] } },
     });
 
     const { password: _, assignments, inventory, ...stats } = manufacturer;
