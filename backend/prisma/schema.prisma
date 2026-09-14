@@ -728,3 +728,24 @@ model DeliveryJob {
   @@index([status])
 }
 
+// Operating, Marketing & Overhead Expenses Model
+model OperatingExpense {
+  id            String   @id @default(uuid())
+  title         String
+  category      String   // MARKETING | RENT | ELECTRICITY | SALARIES | UTILITIES | MISCELLANEOUS | MAINTENANCE
+  amount        Float    // Total expense amount
+  isVatBill     Boolean  @default(false)
+  vatAmount     Float    @default(0) // Input VAT embedded if 13% VAT bill provided
+  date          DateTime @default(now())
+  paymentMethod String   @default("CASH") // CASH | BANK_TRANSFER | QR_PAYMENT | CREDIT
+  vendorName    String?  // Vendor / landlord / service provider
+  invoiceNumber String?  // Bill reference
+  notes         String?  @db.Text
+  createdBy     String   @default("ADMIN")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([category])
+  @@index([date])
+}
+

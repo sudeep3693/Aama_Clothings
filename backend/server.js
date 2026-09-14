@@ -25,6 +25,7 @@ import manufacturerInventoryRouter from "./routes/manufacturerInventoryRoute.js"
 import orderAssignmentRouter from "./routes/orderAssignmentRoute.js";
 import deliveryJobRouter from "./routes/deliveryJobRoute.js";
 import manufacturerDirectOrderRouter from "./routes/manufacturerDirectOrderRoute.js";
+import expenseRouter from "./routes/expenseRoute.js";
 import { ensureStandardChartOfAccounts } from "./services/accountingPostingEngine.js";
 
 // App Config
@@ -88,6 +89,7 @@ app.use("/api/assignment", orderAssignmentRouter);
 app.use("/api/order-assignment", orderAssignmentRouter);
 app.use("/api/delivery-job", deliveryJobRouter);
 app.use("/api/manufacturer-order", manufacturerDirectOrderRouter);
+app.use("/api/expense", expenseRouter);
 
 app.get("/", (req, res) => {
   res.send("API Working");

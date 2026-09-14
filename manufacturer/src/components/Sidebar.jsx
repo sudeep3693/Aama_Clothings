@@ -5,10 +5,8 @@ import {
   Package,
   Boxes,
   Award,
-  FileCheck,
-  Bell,
-  Settings,
   ShoppingBag,
+  Crown,
 } from "lucide-react";
 import { useManufacturer } from "../context/ManufacturerContext";
 
@@ -74,6 +72,20 @@ const Sidebar = () => {
               <div className="flex items-center gap-3">
                 <Award className="w-4 h-4" />
                 <span>Quality &amp; Contract</span>
+              </div>
+            </NavLink>
+          </nav>
+        </div>
+
+        <div>
+          <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+            Customer Care
+          </p>
+          <nav className="space-y-1.5">
+            <NavLink to="/customer-loyalty" className={navLinkStyle}>
+              <div className="flex items-center gap-3">
+                <Crown className="w-4 h-4" />
+                <span>Customer Loyalty</span>
               </div>
             </NavLink>
           </nav>

@@ -464,11 +464,18 @@ const CogsCalculator = ({ token }) => {
 
                                   <div className="space-y-1 text-slate-600 pt-1 border-t border-slate-100 text-[11px]">
                                     <div className="flex items-center justify-between">
-                                      <span>Quoted Supply Cost:</span>
+                                      <span>Quoted Supply Cost (13% VAT Inc):</span>
                                       <strong className="text-slate-900">
                                         {m.agreedCostPrice ? `${currency}${m.agreedCostPrice}` : (m.proposedCostPrice ? `${currency}${m.proposedCostPrice} (Pending)` : "Unset")}
                                       </strong>
                                     </div>
+
+                                    {m.activeCostPrice > 0 && (
+                                      <div className="flex items-center justify-between text-[10px] text-emerald-700 font-medium">
+                                        <span>13% Input VAT Credit:</span>
+                                        <strong>+{currency}{(m.activeCostPrice - m.activeCostPrice / 1.13).toFixed(2)}</strong>
+                                      </div>
+                                    )}
 
                                     <div className="flex items-center justify-between">
                                       <span>Gross Profit per Unit:</span>

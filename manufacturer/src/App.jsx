@@ -13,6 +13,7 @@ import OrderDetail from "./pages/OrderDetail";
 import Inventory from "./pages/Inventory";
 import Performance from "./pages/Performance";
 import DirectOrders from "./pages/DirectOrders";
+import CustomerLoyalty from "./pages/CustomerLoyalty";
 
 const MainLayout = () => {
   const { token, loading } = useManufacturer();
@@ -43,6 +44,7 @@ const MainLayout = () => {
               <Route path="/direct-orders" element={<DirectOrders />} />
               <Route path="/inventory" element={<Inventory />} />
               <Route path="/performance" element={<Performance />} />
+              <Route path="/customer-loyalty" element={<CustomerLoyalty />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>

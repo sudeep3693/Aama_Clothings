@@ -15,7 +15,6 @@ const Add = ({ token }) => {
   const [name, setName] = useState("");
   const [description, setDesription] = useState("");
   const [price, setPrice] = useState("");
-  const [costPrice, setCostPrice] = useState("");
   const [discount, setDiscount] = useState("");
   const [lowStockThreshold, setLowStockThreshold] = useState("5");
   const [selectedCategories, setSelectedCategories] = useState(["Men"]);
@@ -135,7 +134,6 @@ const Add = ({ token }) => {
       formData.append("name", name);
       formData.append("description", description);
       formData.append("price", price);
-      formData.append("costPrice", costPrice || 0);
       formData.append("discount", discount);
       formData.append("category", JSON.stringify(selectedCategories));
       formData.append("subCategory", finalSubCategory);
@@ -173,7 +171,6 @@ const Add = ({ token }) => {
         setImage3(false);
         setImage4(false);
         setPrice("");
-        setCostPrice("");
         setDiscount("");
         setLowStockThreshold("5");
         setBestSeller(false);
@@ -389,17 +386,6 @@ const Add = ({ token }) => {
               type="Number"
               placeholder="25"
               required
-            />
-          </div>
-          <div>
-            <p className="mb-2 text-emerald-900 font-medium">Cost Price (Supplier)</p>
-            <input
-              onChange={(e) => setCostPrice(e.target.value)}
-              value={costPrice}
-              className="w-full px-3 py-2 sm:w-[130px] border border-emerald-300 bg-emerald-50/30 rounded"
-              type="Number"
-              placeholder="0"
-              min="0"
             />
           </div>
           <div>

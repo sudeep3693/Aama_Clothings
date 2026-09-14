@@ -129,7 +129,7 @@ const TaxCompliance = ({ token }) => {
               {currency}{(vat.inputVat || 0).toLocaleString()}
             </p>
             <p className="text-[10px] text-slate-400 mt-1">
-              On Purchases &amp; Freight of {currency}{(vat.taxablePurchases || 0).toLocaleString()}
+              Claimed on Manufacturer COGS (13% Inc), Freight &amp; Overhead VAT Bills
             </p>
           </div>
 

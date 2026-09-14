@@ -326,13 +326,49 @@ const placeOrder = async (req, res) => {
   }
 };
 
-// All Orders data for Admin Panel
+// All Orders data for Admin Panel (monitor all orders - read-only context)
 const allOrders = async (req, res) => {
   try {
     const rawOrders = await prisma.order.findMany({
       orderBy: { date: "desc" },
     });
     const orders = rawOrders.map((item) => ({
+      ...item,
+      _id: item.id,
+      date: Number(item.date),
+    }));
+    res.json({ success: true, orders });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Returns ONLY admin-created orders (Social Media / Phone / Manual orders created by admin).
+ * These are the orders admin can operationally manage (status transitions, cash received, etc.).
+ */
+const allAdminOrders = async (req, res) => {
+  try {
+    const rawOrders = await prisma.order.findMany({
+      orderBy: { date: "desc" },
+    });
+
+    const adminOrders = rawOrders.filter((order) => {
+      // Check orderType field first
+      if (order.orderType === "ADMIN_DIRECT") return true;
+      // Check rewardApplied JSON flag (older format)
+      try {
+        const reward =
+          typeof order.rewardApplied === "string"
+            ? JSON.parse(order.rewardApplied)
+            : order.rewardApplied;
+        if (reward && reward.adminCreated === true) return true;
+      } catch {}
+      return false;
+    });
+
+    const orders = adminOrders.map((item) => ({
       ...item,
       _id: item.id,
       date: Number(item.date),
@@ -365,9 +401,37 @@ const userOrders = async (req, res) => {
 };
 
 // update order status from Admin Panel
+// GUARD: Admin can ONLY update status of orders they directly created.
+// Website/storefront orders are managed exclusively by assigned manufacturer hubs.
 const updateStatus = async (req, res) => {
   try {
     const { orderId, status } = req.body;
+
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) {
+      return res.json({ success: false, message: "Order not found" });
+    }
+
+    // Check if this is an admin-created order
+    let isAdminCreated = order.orderType === "ADMIN_DIRECT";
+    if (!isAdminCreated) {
+      try {
+        const reward =
+          typeof order.rewardApplied === "string"
+            ? JSON.parse(order.rewardApplied)
+            : order.rewardApplied;
+        if (reward && reward.adminCreated === true) isAdminCreated = true;
+      } catch {}
+    }
+
+    if (!isAdminCreated) {
+      return res.json({
+        success: false,
+        message:
+          "Access denied: Website and storefront orders are managed exclusively by the assigned manufacturer hub. Admin can only update orders they directly created.",
+      });
+    }
+
     await prisma.order.update({
       where: { id: orderId },
       data: { status },
@@ -603,6 +667,7 @@ const adminCreateOrder = async (req, res) => {
         date: BigInt(Date.now()),
         address: addressSnapshot,
         loyaltyDiscount: manualDiscount,
+        orderType: "ADMIN_DIRECT", // Mark as admin-created for guard in updateStatus
         rewardApplied: JSON.stringify({
           source: client.source || "Social Media",
           manualDiscount,
@@ -611,6 +676,7 @@ const adminCreateOrder = async (req, res) => {
         }),
       },
     });
+
 
     // Post to Double-Entry General Ledger (Sales & optional Instant Payment)
     postSalesOrderAccounting(newOrder).catch((glErr) => {
@@ -712,6 +778,19 @@ const adminCreateOrder = async (req, res) => {
       }
     }
 
+    // Trigger smart allocation engine asynchronously
+    runAllocationEngine(newOrder.id)
+      .then((result) => {
+        if (!result.success) {
+          console.warn(`[Allocation] Admin Order ${newOrder.id} could not be auto-assigned: ${result.message}`);
+        } else {
+          console.log(`[Allocation] Admin Order ${newOrder.id} assigned to manufacturer ${result.assignment?.manufacturerId}`);
+        }
+      })
+      .catch((err) => {
+        console.error("[Allocation] Engine error on admin order:", err);
+      });
+
     res.json({
       success: true,
       message: "Order created successfully",
@@ -731,6 +810,7 @@ const adminCreateOrder = async (req, res) => {
 export {
   placeOrder,
   allOrders,
+  allAdminOrders,
   userOrders,
   updateStatus,
   cashReceived,

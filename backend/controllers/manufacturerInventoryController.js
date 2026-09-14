@@ -1,4 +1,5 @@
 import { prisma } from "../config/db.js";
+import { syncProductStock } from "../services/stockSyncService.js";
 
 // Helper to safely parse JSON
 const parseJSON = (val, fallback = []) => {
@@ -255,17 +256,8 @@ const updateStock = async (req, res) => {
       update: updateData,
     });
 
-    // Update aggregate product stockQuantity across all manufacturers
-    const allHubs = await prisma.manufacturerInventory.findMany({
-      where: { productId },
-      select: { quantity: true },
-    });
-    const aggregateProductStock = allHubs.reduce((sum, h) => sum + (h.quantity || 0), 0);
-
-    await prisma.product.update({
-      where: { id: productId },
-      data: { stockQuantity: aggregateProductStock },
-    });
+    // Sync aggregate product stock & variant quantities across all manufacturer hubs
+    await syncProductStock(productId);
 
     res.json({
       success: true,

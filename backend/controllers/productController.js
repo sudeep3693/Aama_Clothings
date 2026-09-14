@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from "cloudinary";
 import { prisma } from "../config/db.js";
+import { syncProductStock, syncAllProductsStock } from "../services/stockSyncService.js";
 
 // Helper: safely convert Prisma JSON field to plain array
 const toImageArray = (val) => {
@@ -255,6 +256,9 @@ const listProducts = async (req, res) => {
   try {
     const isAdmin = req.headers.token || req.query.admin === "true";
 
+    // Synchronize current stockQuantity & variant stock from ManufacturerInventory
+    await syncAllProductsStock();
+
     // Admin sees all products; Public customers see only published products
     const whereCondition = isAdmin ? {} : { published: true };
 
@@ -323,6 +327,10 @@ const removeProduct = async (req, res) => {
 const singleProduct = async (req, res) => {
   try {
     const { productId } = req.body;
+    
+    // Sync stock from manufacturer inventory first
+    await syncProductStock(productId);
+
     const rawProduct = await prisma.product.findUnique({
       where: { id: productId },
     });

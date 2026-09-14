@@ -1,4 +1,6 @@
 import { prisma } from "../config/db.js";
+import { calculateUserLoyalty } from "./loyaltyController.js";
+import { syncProductStock } from "../services/stockSyncService.js";
 
 const parseJSON = (val, fallback = []) => {
   if (!val) return fallback;
@@ -29,6 +31,7 @@ export const createDirectOrder = async (req, res) => {
       isPaid = true,
       discountAmount = 0,
       notes = "",
+      applyLoyaltyDiscount = false, // Whether to apply the customer's active loyalty reward
     } = req.body;
 
     if (!manufacturerId) {
@@ -128,7 +131,55 @@ export const createDirectOrder = async (req, res) => {
       });
     }
 
-    const netAmount = Math.max(0, itemsTotal - Number(discountAmount || 0));
+    // ─── Loyalty Integration ──────────────────────────────────────────────
+    let loyaltyRewardApplied = null;
+    let loyaltyDiscountAmt = 0;
+
+    if (customerPhone) {
+      try {
+        // Find user by phone number (exact match)
+        const linkedUser = await prisma.user.findFirst({
+          where: { phone: customerPhone.trim() },
+        });
+        if (linkedUser) {
+          const loyaltyStatus = await calculateUserLoyalty(linkedUser.id);
+          if (loyaltyStatus && loyaltyStatus.activeReward?.isEligible && applyLoyaltyDiscount) {
+            const reward = loyaltyStatus.activeReward;
+            loyaltyDiscountAmt = Number(reward.discountAmount || 0);
+            loyaltyRewardApplied = {
+              applied: true,
+              adminCreated: false,
+              source: `Direct Hub (${directOrderType})`,
+              levelName: loyaltyStatus.currentLevel.name,
+              levelIcon: loyaltyStatus.currentLevel.badgeIcon,
+              discountAmount: loyaltyDiscountAmt,
+              freeShipping: reward.freeShipping || false,
+              giftAmount: reward.giftAmount || 0,
+              giftDescription: reward.giftDescription || "",
+              letterIncluded: reward.letterIncluded || false,
+              customPerk: reward.customPerk || "",
+              perkTags: reward.perkTags || [],
+              userId: linkedUser.id,
+              usageBadge: reward.usageBadge,
+            };
+          } else if (loyaltyStatus) {
+            // Record loyalty info even if not applying discount (informational)
+            loyaltyRewardApplied = {
+              applied: false,
+              levelName: loyaltyStatus.currentLevel.name,
+              levelIcon: loyaltyStatus.currentLevel.badgeIcon,
+              userId: linkedUser.id,
+              isEligible: loyaltyStatus.activeReward?.isEligible || false,
+            };
+          }
+        }
+      } catch (loyErr) {
+        console.error("Loyalty lookup error in direct order:", loyErr);
+      }
+    }
+
+    const totalDiscount = Math.max(0, Number(discountAmount || 0)) + loyaltyDiscountAmt;
+    const netAmount = Math.max(0, itemsTotal - totalDiscount);
     const isWalkIn = directOrderType === "HUB_VISIT";
     const orderStatus = isWalkIn ? "Delivered" : "Order Placed";
     const fulfillmentStatus = isWalkIn ? "delivered" : "accepted";
@@ -157,7 +208,7 @@ export const createDirectOrder = async (req, res) => {
     // Create Order Record
     const order = await prisma.order.create({
       data: {
-        userId: isWalkIn ? "GUEST_WALK_IN" : "GUEST_PHONE_ORDER",
+        userId: loyaltyRewardApplied?.userId || (isWalkIn ? "GUEST_WALK_IN" : "GUEST_PHONE_ORDER"),
         items: frozenItems,
         amount: netAmount,
         address: addressObject,
@@ -169,6 +220,8 @@ export const createDirectOrder = async (req, res) => {
         orderType: "DIRECT_MANUFACTURER",
         directOrderType,
         manufacturerId,
+        loyaltyDiscount: loyaltyDiscountAmt,
+        rewardApplied: loyaltyRewardApplied ? JSON.stringify(loyaltyRewardApplied) : null,
         directNotes:
           notes ||
           (isWalkIn
@@ -221,16 +274,8 @@ export const createDirectOrder = async (req, res) => {
           },
         });
 
-        // Sync Product aggregate stock
-        const allHubs = await prisma.manufacturerInventory.findMany({
-          where: { productId: item.productId },
-          select: { quantity: true },
-        });
-        const aggregateStock = allHubs.reduce((sum, h) => sum + (h.quantity || 0), 0);
-        await prisma.product.update({
-          where: { id: item.productId },
-          data: { stockQuantity: aggregateStock },
-        });
+        // Sync Product aggregate stock and variant quantities
+        await syncProductStock(item.productId);
 
         // Create audit StockLog
         await prisma.stockLog.create({
@@ -285,10 +330,13 @@ export const createDirectOrder = async (req, res) => {
         : "Direct phone order created! Fulfill and deliver directly to customer.",
       order: {
         ...order,
+        date: Number(order.date),
         items: frozenItems,
         address: addressObject,
         assignmentId: assignment.id,
       },
+      loyaltyApplied: loyaltyRewardApplied,
+      loyaltyDiscountAmt,
     });
   } catch (error) {
     console.error("createDirectOrder error:", error);

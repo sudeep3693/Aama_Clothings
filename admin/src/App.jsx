@@ -22,6 +22,7 @@ import AssetManagement from "./pages/AssetManagement";
 import PartnershipEquity from "./pages/PartnershipEquity";
 import TaxCompliance from "./pages/TaxCompliance";
 import ReturnsManagement from "./pages/ReturnsManagement";
+import ExpenseManagement from "./pages/ExpenseManagement";
 import FinancialStatements from "./pages/FinancialStatements";
 import PayablesReceivables from "./pages/PayablesReceivables";
 import ChartOfAccounts from "./pages/ChartOfAccounts";
@@ -68,6 +69,7 @@ const App = () => {
                   <Route path="/treasury" element={<TreasuryCash token={token} />} />
                   <Route path="/assets" element={<AssetManagement token={token} />} />
                   <Route path="/partners" element={<PartnershipEquity token={token} />} />
+                  <Route path="/expenses" element={<ExpenseManagement token={token} />} />
                   <Route path="/tax" element={<TaxCompliance token={token} />} />
                   <Route path="/returns" element={<ReturnsManagement token={token} />} />
                   <Route path="/payables" element={<PayablesReceivables token={token} />} />
