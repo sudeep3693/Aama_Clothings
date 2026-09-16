@@ -22,12 +22,16 @@ import AssetManagement from "./pages/AssetManagement";
 import PartnershipEquity from "./pages/PartnershipEquity";
 import TaxCompliance from "./pages/TaxCompliance";
 import ReturnsManagement from "./pages/ReturnsManagement";
+import ExpenseManagement from "./pages/ExpenseManagement";
 import FinancialStatements from "./pages/FinancialStatements";
 import PayablesReceivables from "./pages/PayablesReceivables";
 import ChartOfAccounts from "./pages/ChartOfAccounts";
 import JournalEntries from "./pages/JournalEntries";
 import GeneralLedger from "./pages/GeneralLedger";
 import TrialBalance from "./pages/TrialBalance";
+import Manufacturers from "./pages/Manufacturers";
+import OrderAssignments from "./pages/OrderAssignments";
+import ManufacturerInventoryMonitor from "./pages/ManufacturerInventoryMonitor";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -64,6 +68,7 @@ const App = () => {
                   <Route path="/treasury" element={<TreasuryCash token={token} />} />
                   <Route path="/assets" element={<AssetManagement token={token} />} />
                   <Route path="/partners" element={<PartnershipEquity token={token} />} />
+                  <Route path="/expenses" element={<ExpenseManagement token={token} />} />
                   <Route path="/tax" element={<TaxCompliance token={token} />} />
                   <Route path="/returns" element={<ReturnsManagement token={token} />} />
                   <Route path="/payables" element={<PayablesReceivables token={token} />} />
@@ -80,6 +85,9 @@ const App = () => {
                   <Route path="/create-order" element={<CreateOrder token={token} />} />
                   <Route path="/add-order" element={<CreateOrder token={token} />} />
                   <Route path="/orders" element={<Orders token={token} />} />
+                  <Route path="/order-assignments" element={<OrderAssignments token={token} />} />
+                  <Route path="/manufacturers" element={<Manufacturers token={token} />} />
+                  <Route path="/manufacturer-inventory" element={<ManufacturerInventoryMonitor token={token} />} />
                   <Route path="/customers" element={<Customers token={token} />} />
                   <Route path="/loyalty-levels" element={<LoyaltyLevels token={token} />} />
                   <Route path="/categories" element={<Categories token={token} />} />

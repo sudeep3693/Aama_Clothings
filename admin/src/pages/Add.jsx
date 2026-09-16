@@ -15,7 +15,6 @@ const Add = ({ token }) => {
   const [name, setName] = useState("");
   const [description, setDesription] = useState("");
   const [price, setPrice] = useState("");
-  const [costPrice, setCostPrice] = useState("");
   const [discount, setDiscount] = useState("");
   const [lowStockThreshold, setLowStockThreshold] = useState("5");
   const [selectedCategories, setSelectedCategories] = useState(["Men"]);
@@ -135,7 +134,6 @@ const Add = ({ token }) => {
       formData.append("name", name);
       formData.append("description", description);
       formData.append("price", price);
-      formData.append("costPrice", costPrice || 0);
       formData.append("discount", discount);
       formData.append("category", JSON.stringify(selectedCategories));
       formData.append("subCategory", finalSubCategory);
@@ -173,7 +171,6 @@ const Add = ({ token }) => {
         setImage3(false);
         setImage4(false);
         setPrice("");
-        setCostPrice("");
         setDiscount("");
         setLowStockThreshold("5");
         setBestSeller(false);
@@ -392,17 +389,6 @@ const Add = ({ token }) => {
             />
           </div>
           <div>
-            <p className="mb-2 text-emerald-900 font-medium">Cost Price (Supplier)</p>
-            <input
-              onChange={(e) => setCostPrice(e.target.value)}
-              value={costPrice}
-              className="w-full px-3 py-2 sm:w-[130px] border border-emerald-300 bg-emerald-50/30 rounded"
-              type="Number"
-              placeholder="0"
-              min="0"
-            />
-          </div>
-          <div>
             <p className="mb-2">Discount (%)</p>
             <input
               onChange={(e) => setDiscount(e.target.value)}
@@ -429,28 +415,34 @@ const Add = ({ token }) => {
       </div>
 
       <div>
-        <p className="mb-2">Product Variants (Size, Color, Quantity)</p>
-        <div className="flex gap-3 mb-3 items-end">
+        <p className="mb-2 font-semibold text-slate-800">
+          Product Varieties (Sizes &amp; Colors)
+        </p>
+        <p className="text-xs text-slate-500 mb-2">
+          Define available sizes and colors for this garment. Physical stock quantities will be updated directly by regional manufacturer hubs.
+        </p>
+        <div className="flex gap-3 mb-3 items-end flex-wrap">
           <div>
-            <p className="text-xs mb-1">Size</p>
+            <p className="text-xs font-medium text-slate-600 mb-1">Size</p>
             <select
               value={variantSize}
               onChange={(e) => setVariantSize(e.target.value)}
-              className="border px-2 py-1 rounded"
+              className="border border-slate-300 px-3 py-1.5 rounded-lg text-xs bg-white"
             >
-              {["S", "M", "L", "XL", "XXL"].map((sz) => (
+              {["S", "M", "L", "XL", "XXL", "Free Size"].map((sz) => (
                 <option key={sz} value={sz}>{sz}</option>
               ))}
             </select>
           </div>
           <div>
-            <p className="text-xs mb-1">Color</p>
+            <p className="text-xs font-medium text-slate-600 mb-1">Color</p>
             {colorsList.length > 0 ? (
               <select
                 value={variantColor}
                 onChange={(e) => setVariantColor(e.target.value)}
-                className="border px-2 py-1 rounded w-28"
+                className="border border-slate-300 px-3 py-1.5 rounded-lg text-xs w-32 bg-white"
               >
+                <option value="">Select Color</option>
                 {colorsList.map((c) => (
                   <option key={c.id} value={c.name}>{c.name}</option>
                 ))}
@@ -458,53 +450,54 @@ const Add = ({ token }) => {
             ) : (
               <input
                 type="text"
-                placeholder="e.g. Red"
+                placeholder="e.g. Navy Blue"
                 value={variantColor}
                 onChange={(e) => setVariantColor(e.target.value)}
-                className="border px-2 py-1 rounded w-24"
+                className="border border-slate-300 px-3 py-1.5 rounded-lg text-xs w-28 bg-white"
               />
             )}
-          </div>
-          <div>
-            <p className="text-xs mb-1">Qty</p>
-            <input
-              type="number"
-              min="0"
-              placeholder="0"
-              value={variantQty}
-              onChange={(e) => setVariantQty(e.target.value)}
-              className="border px-2 py-1 rounded w-16"
-            />
           </div>
           <button
             type="button"
             onClick={() => {
-              if (variantColor && variantQty !== "") {
-                setVariants([...variants, { size: variantSize, color: variantColor, quantity: Number(variantQty) }]);
+              if (variantColor) {
+                const exists = variants.some(
+                  (v) => v.size === variantSize && v.color === variantColor
+                );
+                if (exists) {
+                  toast.warning("This size and color variety already exists.");
+                  return;
+                }
+                setVariants([...variants, { size: variantSize, color: variantColor, quantity: 0 }]);
                 setVariantColor("");
-                setVariantQty("");
               } else {
-                toast.error("Please enter a color and quantity");
+                toast.error("Please select or enter a color");
               }
             }}
-            className="bg-black text-white px-3 py-1 rounded text-sm mb-[1px]"
+            className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors"
           >
-            Add Variant
+            + Add Variety
           </button>
         </div>
-        <div className="flex flex-col gap-2 max-w-sm">
-          {variants.map((v, idx) => (
-            <div key={idx} className="flex justify-between items-center bg-slate-100 px-3 py-2 rounded text-sm border">
-              <span>{v.size} / {v.color} - Qty: {v.quantity}</span>
-              <button
-                type="button"
-                onClick={() => setVariants(variants.filter((_, i) => i !== idx))}
-                className="text-red-500 font-bold hover:text-red-700"
-              >
-                X
-              </button>
-            </div>
-          ))}
+        <div className="flex flex-wrap gap-2 max-w-xl">
+          {variants.length === 0 ? (
+            <p className="text-xs text-slate-400 italic">No specific varieties added. Default standard template will be used.</p>
+          ) : (
+            variants.map((v, idx) => (
+              <div key={idx} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl text-xs font-medium border border-slate-200">
+                <span className="font-bold text-slate-800">Size: {v.size}</span>
+                <span>•</span>
+                <span className="text-slate-600">Color: {v.color}</span>
+                <button
+                  type="button"
+                  onClick={() => setVariants(variants.filter((_, i) => i !== idx))}
+                  className="text-rose-500 font-bold hover:text-rose-700 ml-1 text-sm cursor-pointer"
+                >
+                  ×
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

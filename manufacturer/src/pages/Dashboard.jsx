@@ -1,0 +1,361 @@
+import React, { useEffect, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
+import axios from "axios";
+import { toast } from "react-toastify";
+import {
+  Package,
+  Clock,
+  CheckCircle2,
+  Truck,
+  Boxes,
+  Star,
+  AlertTriangle,
+  ArrowRight,
+  TrendingUp,
+  RefreshCw,
+  ShoppingBag,
+} from "lucide-react";
+import { useManufacturer } from "../context/ManufacturerContext";
+import StatusBadge from "../components/StatusBadge";
+
+const Dashboard = () => {
+  const { token, manufacturer, backendUrl, currency, setStats } = useManufacturer();
+  const [loading, setLoading] = useState(true);
+  const [recentAssignments, setRecentAssignments] = useState([]);
+  const [lowStockCount, setLowStockCount] = useState(0);
+  const [hubStats, setHubStats] = useState({
+    pending: 0,
+    accepted: 0,
+    preparing: 0,
+    packed: 0,
+    ready: 0,
+    delivered: 0,
+    total: 0,
+  });
+
+  const loadDashboardData = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      // 1. Fetch assignments
+      const assignRes = await axios.get(`${backendUrl}/api/order-assignment/my`, {
+        headers: { token },
+      });
+      if (assignRes.data.success) {
+        const list = assignRes.data.assignments || [];
+        setRecentAssignments(list.slice(0, 6));
+
+        const pending = list.filter((a) => a.status === "assigned").length;
+        const accepted = list.filter((a) => a.status === "accepted").length;
+        const preparing = list.filter((a) => a.status === "preparing").length;
+        const packed = list.filter((a) => a.status === "packed").length;
+        const ready = list.filter((a) => a.status === "ready_for_pickup").length;
+        const delivered = list.filter((a) => a.status === "delivered").length;
+
+        const currentCounts = {
+          pending,
+          accepted,
+          preparing,
+          packed,
+          ready,
+          delivered,
+          total: list.length,
+          active: accepted + preparing + packed + ready,
+        };
+        setHubStats(currentCounts);
+        setStats(currentCounts);
+      }
+
+      // 2. Fetch inventory for low stock count
+      const invRes = await axios.get(`${backendUrl}/api/manufacturer-inventory/my`, {
+        headers: { token },
+      });
+      if (invRes.data.success) {
+        const low = invRes.data.inventory.filter(
+          (item) => item.quantity - item.reservedQty <= item.lowStockThreshold
+        );
+        setLowStockCount(low.length);
+      }
+    } catch (err) {
+      console.error("Dashboard data load failed:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, backendUrl, setStats]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  const handleQuickAccept = async (assignmentId) => {
+    try {
+      const res = await axios.post(
+        `${backendUrl}/api/order-assignment/accept/${assignmentId}`,
+        {},
+        { headers: { token } }
+      );
+      if (res.data.success) {
+        toast.success("Order accepted! Moved to production.");
+        loadDashboardData();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to accept order");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Top Banner / Greeting */}
+      <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white rounded-2xl p-6 sm:p-8 shadow-sm relative overflow-hidden">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold border border-emerald-500/30">
+                City Hub: {manufacturer?.city}
+              </span>
+              <span className="text-xs text-slate-300">
+                Contract: <span className="text-emerald-300 font-semibold">{manufacturer?.contractStatus}</span>
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
+              {manufacturer?.businessName} Operations
+            </h1>
+            <p className="text-slate-300 text-xs sm:text-sm mt-1 max-w-xl">
+              Real-time regional dispatch engine. Fulfill localized orders, manage fabric stock, and maintain strict Aama quality standards.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={loadDashboardData}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-md transition-all border border-white/10 cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+            <Link
+              to="/direct-orders"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-all shadow-xs border border-white/20 cursor-pointer"
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              <span>Direct Sale</span>
+            </Link>
+            <Link
+              to="/orders"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+            >
+              <span>View Orders</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Pending Card */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Pending Acceptance
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-black text-slate-900">
+              {hubStats.pending}
+            </span>
+            {hubStats.pending > 0 && (
+              <span className="text-[11px] font-bold text-amber-600 animate-pulse">
+                Action needed
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* In Production */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              In Production
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <Package className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-black text-slate-900">
+              {hubStats.accepted + hubStats.preparing}
+            </span>
+            <span className="text-[11px] text-slate-500">packaging</span>
+          </div>
+        </div>
+
+        {/* Ready for Pickup */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Ready for Pickup
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Truck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-black text-slate-900">
+              {hubStats.packed + hubStats.ready}
+            </span>
+            <span className="text-[11px] text-emerald-600 font-medium">Awaiting driver</span>
+          </div>
+        </div>
+
+        {/* Quality Rating */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Customer Quality Score
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <Star className="w-4 h-4 fill-amber-500" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-black text-slate-900">
+              {manufacturer?.qualityRating?.toFixed(1) || "5.0"}
+            </span>
+            <span className="text-[11px] text-slate-500">
+              / 5.0 ({manufacturer?.ratingCount || 0} reviews)
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Low Stock Warning Banner if any */}
+      {lowStockCount > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs sm:text-sm font-bold text-amber-900">
+                {lowStockCount} item{lowStockCount > 1 ? "s" : ""} running low on stock in your hub!
+              </p>
+              <p className="text-xs text-amber-700">
+                Replenish inventory to avoid missing out on auto-assigned customer orders.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/inventory"
+            className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shrink-0"
+          >
+            Update Stock
+          </Link>
+        </div>
+      )}
+
+      {/* Recent Assigned Orders Table */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Recent Assignments</h2>
+            <p className="text-xs text-slate-500">
+              Live orders routed to your hub by the proximity allocation engine
+            </p>
+          </div>
+          <Link
+            to="/orders"
+            className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+          >
+            View All ({hubStats.total})
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        {recentAssignments.length === 0 ? (
+          <div className="p-12 text-center text-slate-400">
+            <Package className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+            <p className="font-semibold text-slate-600 text-sm">No orders assigned yet</p>
+            <p className="text-xs text-slate-400 mt-1">
+              When customers order in or near {manufacturer?.city}, orders will appear here automatically.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-bold tracking-wider border-b border-slate-100">
+                <tr>
+                  <th className="py-3 px-4">Order ID</th>
+                  <th className="py-3 px-4">Customer City</th>
+                  <th className="py-3 px-4">Items / Qty</th>
+                  <th className="py-3 px-4">Amount</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                {recentAssignments.map((assignment) => {
+                  const order = assignment.order;
+                  const totalQty = order?.items?.reduce((sum, i) => sum + (i.quantity || 1), 0) || 0;
+                  return (
+                    <tr key={assignment.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-4 font-mono font-bold text-slate-900">
+                        #{order?.id?.slice(-6) || assignment.id.slice(-6)}
+                      </td>
+                      <td className="py-3 px-4 text-slate-700">
+                        {order?.address?.city || order?.shippingAddress?.city || "Nepal"}
+                      </td>
+                      <td className="py-3 px-4 text-slate-700">
+                        <span className="font-semibold text-slate-900">{totalQty} pcs</span>
+                        <span className="text-slate-400 block text-[11px]">
+                          {order?.items?.map((i) => i.name || i.product?.name).filter(Boolean).slice(0, 2).join(", ")}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        {currency}
+                        {order?.amount?.toLocaleString() || "0"}
+                      </td>
+                      <td className="py-3 px-4">
+                        <StatusBadge status={assignment.status} />
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        {assignment.status === "assigned" ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleQuickAccept(assignment.id)}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer"
+                            >
+                              Accept
+                            </button>
+                            <Link
+                              to={`/orders/${assignment.id}`}
+                              className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs"
+                            >
+                              View
+                            </Link>
+                          </div>
+                        ) : (
+                          <Link
+                            to={`/orders/${assignment.id}`}
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs"
+                          >
+                            Manage
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;

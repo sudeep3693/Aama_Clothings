@@ -19,6 +19,12 @@ import cogsRouter from "./routes/cogsRoute.js";
 import financialRouter from "./routes/financialRoute.js";
 import returnsRouter from "./routes/returnsRoute.js";
 import accountingRouter from "./routes/accountingRoute.js";
+import manufacturerRouter from "./routes/manufacturerRoute.js";
+import manufacturerInventoryRouter from "./routes/manufacturerInventoryRoute.js";
+import orderAssignmentRouter from "./routes/orderAssignmentRoute.js";
+import manufacturerDirectOrderRouter from "./routes/manufacturerDirectOrderRoute.js";
+import expenseRouter from "./routes/expenseRoute.js";
+import deliveryRouter from "./routes/deliveryRoute.js";
 import { ensureStandardChartOfAccounts } from "./services/accountingPostingEngine.js";
 
 // App Config
@@ -35,8 +41,10 @@ app.use(express.json());
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
+  'http://localhost:5175',  // Manufacturer portal
   process.env.FRONTEND_URL,
   process.env.ADMIN_URL,
+  process.env.MANUFACTURER_URL,
 ].filter(Boolean); // removes undefined/null if env vars not set
 
 app.use(cors({
@@ -70,9 +78,18 @@ app.use("/api/cogs", cogsRouter);
 app.use("/api/finance", financialRouter);
 app.use("/api/returns", returnsRouter);
 app.use("/api/accounting", accountingRouter);
+// Manufacturer system
+app.use("/api/manufacturer", manufacturerRouter);
+app.use("/api/manufacturer-inventory", manufacturerInventoryRouter);
+app.use("/api/assignment", orderAssignmentRouter);
+app.use("/api/order-assignment", orderAssignmentRouter);
+app.use("/api/manufacturer-order", manufacturerDirectOrderRouter);
+app.use("/api/expense", expenseRouter);
+app.use("/api/delivery", deliveryRouter);
+app.use("/api/delivery-job", deliveryRouter);
 
 app.get("/", (req, res) => {
   res.send("API Working");
 });
 
-app.listen(port, () => console.log("Server started on PORT : " + port));
+app.listen(port, () => console.log("Server started on PORT : " + port));

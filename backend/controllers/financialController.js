@@ -34,7 +34,7 @@ export const getFinancialAnalyticsDashboard = async (req, res) => {
     const [
       orders,
       products,
-      monthlyExpense,
+      operatingExpensesList,
       accounts,
       fixedAssets,
       partners,
@@ -51,7 +51,11 @@ export const getFinancialAnalyticsDashboard = async (req, res) => {
         },
       }),
       prisma.product.findMany(),
-      prisma.monthlyExpense.findUnique({ where: { yearMonth: requestedMonth } }),
+      prisma.operatingExpense.findMany({
+        where: {
+          date: { gte: startDate, lte: endDate },
+        },
+      }),
       prisma.financialAccount.findMany({ where: { status: "ACTIVE" } }),
       prisma.fixedAsset.findMany(),
       prisma.partnerEquity.findMany({ where: { status: "ACTIVE" } }),
@@ -79,7 +83,7 @@ export const getFinancialAnalyticsDashboard = async (req, res) => {
     // Revenue calculations (Gross MRP, VAT Breakdown)
     const vatRate = 0.13; // 13% Nepal VAT
     let grossPeriodRevenueIncVat = 0;
-    let periodDirectCOGS = 0;
+    let periodDirectCOGS = 0; // VAT inclusive Manufacturer COGS
     let unitsSoldPeriod = 0;
 
     // Build Product Cost lookup
@@ -113,19 +117,43 @@ export const getFinancialAnalyticsDashboard = async (req, res) => {
     const taxableRevenue = Number((netRevenueIncVat / (1 + vatRate)).toFixed(2));
     const outputVatCollected = Number((netRevenueIncVat - taxableRevenue).toFixed(2));
 
-    // Operating Overheads
-    const marketingSpend = monthlyExpense ? Number(monthlyExpense.marketingSpend || 0) : 0;
-    const officeRent = monthlyExpense ? Number(monthlyExpense.officeRent || 0) : 0;
-    const utilities = monthlyExpense ? Number(monthlyExpense.utilities || 0) : 0;
-    const salaries = monthlyExpense ? Number(monthlyExpense.salaries || 0) : 0;
-    const softwareTools = monthlyExpense ? Number(monthlyExpense.softwareTools || 0) : 0;
-    const miscExpenses = monthlyExpense ? Number(monthlyExpense.miscExpenses || 0) : 0;
-    const packagingCostPerUnit = monthlyExpense ? Number(monthlyExpense.packagingCostPerUnit || 20) : 20;
-    const totalPackagingExpense = Number((packagingCostPerUnit * unitsSoldPeriod).toFixed(2));
+    // Manufacturer COGS is 13% VAT Inclusive
+    const taxableDirectCOGS = Number((periodDirectCOGS / (1 + vatRate)).toFixed(2));
+    const cogsInputVatClaimable = Number((periodDirectCOGS - taxableDirectCOGS).toFixed(2));
 
-    const totalFixedOverheads = officeRent + utilities + salaries + softwareTools + miscExpenses;
-    const totalVariableCosts = periodDirectCOGS + marketingSpend + totalPackagingExpense;
-    const totalOperatingExpenses = totalFixedOverheads + marketingSpend + totalPackagingExpense;
+    // Categorized Operating Expenses
+    let marketingSpend = 0;
+    let officeRent = 0;
+    let electricity = 0;
+    let salaries = 0;
+    let utilities = 0;
+    let miscExpenses = 0;
+    let maintenance = 0;
+    let softwareTools = 0;
+    let totalPackagingExpense = 0;
+    let operatingExpenseVatClaimable = 0;
+
+    operatingExpensesList.forEach((exp) => {
+      const amt = Number(exp.amount || 0);
+      const vat = Number(exp.vatAmount || 0);
+      const cat = (exp.category || "MISCELLANEOUS").toUpperCase();
+
+      if (cat === "MARKETING") marketingSpend += amt;
+      else if (cat === "RENT") officeRent += amt;
+      else if (cat === "ELECTRICITY") electricity += amt;
+      else if (cat === "SALARIES") salaries += amt;
+      else if (cat === "UTILITIES") utilities += amt;
+      else if (cat === "MAINTENANCE") maintenance += amt;
+      else miscExpenses += amt;
+
+      if (exp.isVatBill) {
+        operatingExpenseVatClaimable += vat;
+      }
+    });
+
+    const totalFixedOverheads = officeRent + electricity + utilities + salaries + miscExpenses + maintenance;
+    const totalOperatingExpenses = totalFixedOverheads + marketingSpend;
+    const totalVariableCosts = taxableDirectCOGS + marketingSpend;
 
     // Monthly Asset Depreciation
     let monthlyDepreciation = 0;
@@ -142,9 +170,11 @@ export const getFinancialAnalyticsDashboard = async (req, res) => {
     });
 
     // Profitability Metrics
-    const grossProfit = Number((taxableRevenue - periodDirectCOGS).toFixed(2));
+    // Gross Profit = Net Taxable Revenue - Net Taxable COGS
+    const grossProfit = Number((taxableRevenue - taxableDirectCOGS).toFixed(2));
     const grossProfitMargin = taxableRevenue > 0 ? Number(((grossProfit / taxableRevenue) * 100).toFixed(1)) : 0;
     
+    // Net Operating Profit (EBITDA) = Gross Profit - Operating Expenses
     const operatingProfitEBITDA = Number((grossProfit - totalOperatingExpenses).toFixed(2));
     const netProfitBeforeTax = Number((operatingProfitEBITDA - monthlyDepreciation - damagedAssetLoss).toFixed(2));
     const netProfitMargin = taxableRevenue > 0 ? Number(((netProfitBeforeTax / taxableRevenue) * 100).toFixed(1)) : 0;
@@ -1619,14 +1649,18 @@ export const calculateAndExecuteProfitDistribution = async (req, res) => {
     const pStart = periodStart ? new Date(periodStart) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const pEnd = periodEnd ? new Date(periodEnd) : new Date();
 
-    const [orders, monthlyExpenses, partners] = await Promise.all([
+    const [orders, operatingExpensesList, partners] = await Promise.all([
       prisma.order.findMany({
         where: {
           date: { gte: BigInt(pStart.getTime()), lte: BigInt(pEnd.getTime()) },
           status: { notIn: ["Cancelled"] },
         },
       }),
-      prisma.monthlyExpense.findMany(),
+      prisma.operatingExpense.findMany({
+        where: {
+          date: { gte: pStart, lte: pEnd },
+        },
+      }),
       prisma.partnerEquity.findMany({ where: { status: "ACTIVE" } }),
     ]);
 
@@ -1637,17 +1671,9 @@ export const calculateAndExecuteProfitDistribution = async (req, res) => {
     const grossRevenue = orders.reduce((acc, o) => acc + Number(o.amount || 0), 0);
     const taxableRevenue = grossRevenue / 1.13;
     const estCOGS = taxableRevenue * 0.55;
-    const totalExpenses = monthlyExpenses.reduce(
-      (acc, e) =>
-        acc +
-        Number(e.salaries || 0) +
-        Number(e.officeRent || 0) +
-        Number(e.marketingSpend || 0) +
-        Number(e.utilities || 0),
-      0
-    );
+    const totalExpenses = operatingExpensesList.reduce((acc, e) => acc + Number(e.amount || 0), 0);
 
-    const netProfit = Math.max(0, taxableRevenue - estCOGS - totalExpenses / 12);
+    const netProfit = Math.max(0, taxableRevenue - estCOGS - totalExpenses);
     const retainPct = Number(retainedEarningsPercentage || 20);
     const retainedAmount = Number(((netProfit * retainPct) / 100).toFixed(2));
     const distributableAmount = Number((netProfit - retainedAmount).toFixed(2));
@@ -2360,7 +2386,16 @@ export const getVATAndTaxReport = async (req, res) => {
     const startTimestamp = BigInt(startDate.getTime());
     const endTimestamp = BigInt(endDate.getTime());
 
-    const [orders, shipments, customerReturns, supplierReturns, monthlyExpense, fixedAssets, taxPayables] = await Promise.all([
+    const [
+      orders,
+      shipments,
+      customerReturns,
+      supplierReturns,
+      operatingExpenses,
+      fixedAssets,
+      taxPayables,
+      products,
+    ] = await Promise.all([
       prisma.order.findMany({
         where: {
           date: { gte: startTimestamp, lte: endTimestamp },
@@ -2384,11 +2419,16 @@ export const getVATAndTaxReport = async (req, res) => {
           status: "COMPLETED",
         },
       }),
-      prisma.monthlyExpense.findUnique({ where: { yearMonth: requestedMonth } }),
+      prisma.operatingExpense.findMany({
+        where: {
+          date: { gte: startDate, lte: endDate },
+        },
+      }),
       prisma.fixedAsset.findMany({ where: { status: "ACTIVE" } }),
       prisma.accountPayable.findMany({
         where: { category: "TAX_DUE", status: { in: ["UNPAID", "PARTIALLY_PAID"] } },
       }),
+      prisma.product.findMany(),
     ]);
 
     const vatRate = 0.13; // 13% Nepal VAT
@@ -2400,7 +2440,33 @@ export const getVATAndTaxReport = async (req, res) => {
     const taxableSales = Number((netSalesIncVat / (1 + vatRate)).toFixed(2));
     const outputVat = Number((netSalesIncVat - taxableSales).toFixed(2));
 
-    // Input VAT on Inbound Shipments & Purchases
+    // Input VAT Breakdown:
+    // 1. Manufacturer COGS (13% VAT Inclusive)
+    const productCostMap = {};
+    products.forEach((p) => {
+      productCostMap[p.id] = Number(p.costPrice || 0);
+    });
+
+    let totalCogsIncVat = 0;
+    orders.forEach((ord) => {
+      let items = [];
+      try {
+        items = typeof ord.items === "string" ? JSON.parse(ord.items) : (ord.items || []);
+      } catch {
+        items = [];
+      }
+      items.forEach((item) => {
+        const qty = Number(item.quantity || 1);
+        const pId = item.productId || item._id || item.id;
+        const unitCost = productCostMap[pId] || 0;
+        totalCogsIncVat += unitCost * qty;
+      });
+    });
+
+    const cogsTaxable = Number((totalCogsIncVat / (1 + vatRate)).toFixed(2));
+    const cogsInputVat = Number((totalCogsIncVat - cogsTaxable).toFixed(2));
+
+    // 2. Input VAT on Inbound Shipments & Freight
     let totalPurchasesWithVat = 0;
     shipments.forEach((s) => {
       totalPurchasesWithVat += Number(s.totalFreightCost || 0) + Number(s.customsOrTaxes || 0);
@@ -2418,19 +2484,31 @@ export const getVATAndTaxReport = async (req, res) => {
     const supplierReturnDebits = supplierReturns.reduce((acc, r) => acc + Number(r.totalDebitAmount || 0), 0);
     const netPurchasesWithVat = Math.max(0, totalPurchasesWithVat - supplierReturnDebits);
     const taxablePurchases = Number((netPurchasesWithVat / (1 + vatRate)).toFixed(2));
-    const inputVat = Number((netPurchasesWithVat - taxablePurchases).toFixed(2));
+    const freightInputVat = Number((netPurchasesWithVat - taxablePurchases).toFixed(2));
 
-    // Net VAT Payable
+    // 3. Input VAT on VAT-Inclusive Operating Expenses & Deductible Marketing
+    let deductibleMarketing = 0;
+    let expenseInputVat = 0;
+    let totalOperatingExpenses = 0;
+    operatingExpenses.forEach((exp) => {
+      const amt = Number(exp.amount || 0);
+      totalOperatingExpenses += amt;
+      if ((exp.category || "").toUpperCase() === "MARKETING") {
+        deductibleMarketing += amt;
+      }
+      if (exp.isVatBill) {
+        expenseInputVat += Number(exp.vatAmount || 0);
+      }
+    });
+    expenseInputVat = Number(expenseInputVat.toFixed(2));
+
+    // Total Input VAT Credit Claimable
+    const inputVat = Number((cogsInputVat + freightInputVat + expenseInputVat).toFixed(2));
+
+    // Net VAT Payable to IRD
     const netVatPayable = Number((outputVat - inputVat).toFixed(2));
 
     // Corporate Income Tax & Legal Deductions Analysis
-    const deductibleRent = monthlyExpense ? Number(monthlyExpense.officeRent || 0) : 0;
-    const deductibleSalaries = monthlyExpense ? Number(monthlyExpense.salaries || 0) : 0;
-    const deductibleMarketing = monthlyExpense ? Number(monthlyExpense.marketingSpend || 0) : 0;
-    const deductibleUtilities = monthlyExpense ? Number(monthlyExpense.utilities || 0) : 0;
-    const deductibleSoftware = monthlyExpense ? Number(monthlyExpense.softwareTools || 0) : 0;
-    const deductibleMisc = monthlyExpense ? Number(monthlyExpense.miscExpenses || 0) : 0;
-
     let monthlyTaxDepreciation = 0;
     fixedAssets.forEach((asset) => {
       const annualRate = Number(asset.depreciationRate || 25) / 100;
@@ -2439,11 +2517,8 @@ export const getVATAndTaxReport = async (req, res) => {
     });
     monthlyTaxDepreciation = Number(monthlyTaxDepreciation.toFixed(2));
 
-    const totalAllowableDeductions = Number(
-      (deductibleRent + deductibleSalaries + deductibleMarketing + deductibleUtilities + deductibleSoftware + deductibleMisc + monthlyTaxDepreciation).toFixed(2)
-    );
-
-    const estimatedTaxableIncome = Math.max(0, Number((taxableSales - (taxableSales * 0.5) - totalAllowableDeductions).toFixed(2)));
+    const totalAllowableDeductions = Number((totalOperatingExpenses + monthlyTaxDepreciation).toFixed(2));
+    const estimatedTaxableIncome = Math.max(0, Number((taxableSales - cogsTaxable - totalAllowableDeductions).toFixed(2)));
     const corporateTaxRate = 25; // 25% Nepal Corporate Income Tax Rate
     const estimatedCorporateTax = Number(((estimatedTaxableIncome * corporateTaxRate) / 100).toFixed(2));
 
@@ -2520,7 +2595,7 @@ export const getFinancialStatements = async (req, res) => {
     const [
       orders,
       products,
-      monthlyExpense,
+      operatingExpensesList,
       accounts,
       fixedAssets,
       partners,
@@ -2536,7 +2611,11 @@ export const getFinancialStatements = async (req, res) => {
         },
       }),
       prisma.product.findMany(),
-      prisma.monthlyExpense.findUnique({ where: { yearMonth: requestedMonth } }),
+      prisma.operatingExpense.findMany({
+        where: {
+          date: { gte: startDate, lte: endDate },
+        },
+      }),
       prisma.financialAccount.findMany({ where: { status: "ACTIVE" } }),
       prisma.fixedAsset.findMany(),
       prisma.partnerEquity.findMany({ where: { status: "ACTIVE" } }),
@@ -2561,8 +2640,8 @@ export const getFinancialStatements = async (req, res) => {
     const netRevenue = Math.max(0, grossRevenue - returnsAndAllowances);
     const taxableNetRevenue = Number((netRevenue / 1.13).toFixed(2));
 
-    // COGS
-    let cogs = 0;
+    // COGS (Manufacturer COGS is 13% VAT Inclusive)
+    let cogsIncVat = 0;
     const costMap = {};
     products.forEach((p) => { costMap[p.id] = Number(p.costPrice || 0); });
     orders.forEach((ord) => {
@@ -2571,19 +2650,35 @@ export const getFinancialStatements = async (req, res) => {
       items.forEach((item) => {
         const qty = Number(item.quantity || 1);
         const pId = item.productId || item._id || item.id;
-        cogs += (costMap[pId] || 0) * qty;
+        cogsIncVat += (costMap[pId] || 0) * qty;
       });
     });
 
+    const cogs = Number((cogsIncVat / 1.13).toFixed(2));
     const grossProfit = Number((taxableNetRevenue - cogs).toFixed(2));
 
-    const marketing = monthlyExpense ? Number(monthlyExpense.marketingSpend || 0) : 0;
-    const rent = monthlyExpense ? Number(monthlyExpense.officeRent || 0) : 0;
-    const salaries = monthlyExpense ? Number(monthlyExpense.salaries || 0) : 0;
-    const utilities = monthlyExpense ? Number(monthlyExpense.utilities || 0) : 0;
-    const software = monthlyExpense ? Number(monthlyExpense.softwareTools || 0) : 0;
-    const misc = monthlyExpense ? Number(monthlyExpense.miscExpenses || 0) : 0;
-    const totalOpex = marketing + rent + salaries + utilities + software + misc;
+    // Operating Overhead Expenses Breakdown
+    let marketing = 0;
+    let rent = 0;
+    let electricity = 0;
+    let salaries = 0;
+    let utilities = 0;
+    let maintenance = 0;
+    let misc = 0;
+
+    operatingExpensesList.forEach((exp) => {
+      const amt = Number(exp.amount || 0);
+      const cat = (exp.category || "MISCELLANEOUS").toUpperCase();
+      if (cat === "MARKETING") marketing += amt;
+      else if (cat === "RENT") rent += amt;
+      else if (cat === "ELECTRICITY") electricity += amt;
+      else if (cat === "SALARIES") salaries += amt;
+      else if (cat === "UTILITIES") utilities += amt;
+      else if (cat === "MAINTENANCE") maintenance += amt;
+      else misc += amt;
+    });
+
+    const totalOpex = marketing + rent + electricity + salaries + utilities + maintenance + misc;
 
     let depreciation = 0;
     fixedAssets.forEach((a) => {
@@ -2616,6 +2711,47 @@ export const getFinancialStatements = async (req, res) => {
     const retainedEarnings = Number((totalAssets - totalLiabilities - partnerCapital).toFixed(2));
     const totalEquity = Number((partnerCapital + retainedEarnings).toFixed(2));
 
+    // Cash Flow Statement (GAAP / IFRS Direct & Indirect Reconciled)
+    // 1. Operating Cash Inflows / Outflows
+    const cashFromCustomers = Number(netRevenue.toFixed(2));
+    const cashPaidToSuppliers = Number(cogsIncVat.toFixed(2));
+    const cashPaidForOperatingExpenses = Number(totalOpex.toFixed(2));
+    const netOperatingCashFlow = Number((cashFromCustomers - cashPaidToSuppliers - cashPaidForOperatingExpenses).toFixed(2));
+
+    // 2. Investing Cash Outflows (Capital Asset Purchases ONLY; Depreciation is Non-Cash)
+    const assetAdditionsInPeriod = fixedAssets
+      .filter((a) => a.createdAt && new Date(a.createdAt) >= startDate && new Date(a.createdAt) <= endDate)
+      .reduce((sum, a) => sum + Number(a.paidAmount || a.purchaseCost || 0), 0);
+    const netInvestingCashFlow = -Number(assetAdditionsInPeriod.toFixed(2));
+
+    // 3. Financing Cash Flows (Capital Injections, Loans, Repayments, Drawings)
+    const capitalInjectionsInPeriod = partners
+      .filter((p) => p.createdAt && new Date(p.createdAt) >= startDate && new Date(p.createdAt) <= endDate)
+      .reduce((sum, p) => sum + Number(p.initialCapital || 0), 0);
+    const loansDisbursedInPeriod = liabilities
+      .filter((l) => l.createdAt && new Date(l.createdAt) >= startDate && new Date(l.createdAt) <= endDate)
+      .reduce((sum, l) => sum + Number(l.principalAmount || 0), 0);
+    const loanRepaymentsInPeriod = liabilities.reduce((sum, l) => sum + Number(l.principalPaid || 0), 0);
+    const partnerDrawingsInPeriod = partners.reduce((sum, p) => sum + Number(p.totalDrawings || 0), 0);
+
+    const netFinancingCashFlow = Number(
+      (capitalInjectionsInPeriod + loansDisbursedInPeriod - loanRepaymentsInPeriod - partnerDrawingsInPeriod).toFixed(2)
+    );
+
+    // 4. Net Cash Flow & Liquid Cash Reconciliation
+    const netCashFlow = Number((netOperatingCashFlow + netInvestingCashFlow + netFinancingCashFlow).toFixed(2));
+    const endingCash = cashAndEquivalents;
+    const beginningCash = Number((endingCash - netCashFlow).toFixed(2));
+
+    // 5. Indirect Method Operating Cash Flow Reconciliation
+    const vatDifference = Number((netRevenue - taxableNetRevenue - (cogsIncVat - cogs)).toFixed(2));
+    const indirectReconciliation = {
+      netIncome: netIncomeAfterTax,
+      depreciationAddback: depreciation,
+      taxAndVatAdjustment: vatDifference,
+      reconciledOperatingCashFlow: netOperatingCashFlow,
+    };
+
     res.json({
       success: true,
       data: {
@@ -2629,9 +2765,10 @@ export const getFinancialStatements = async (req, res) => {
           operatingExpenses: {
             marketing,
             rent,
+            electricity,
             salaries,
             utilities,
-            software,
+            maintenance,
             misc,
             total: totalOpex,
           },
@@ -2669,10 +2806,25 @@ export const getFinancialStatements = async (req, res) => {
           balanceCheck: totalAssets === Number((totalLiabilities + totalEquity).toFixed(2)),
         },
         cashFlowStatement: {
-          operatingActivities: Number((netIncomeAfterTax + depreciation).toFixed(2)),
-          investingActivities: -Number(depreciation),
-          financingActivities: 0,
-          netCashFlow: Number((netIncomeAfterTax + depreciation - depreciation).toFixed(2)),
+          operatingActivities: netOperatingCashFlow,
+          investingActivities: netInvestingCashFlow,
+          financingActivities: netFinancingCashFlow,
+          netCashFlow,
+          beginningCash,
+          endingCash,
+          details: {
+            cashFromCustomers,
+            cashPaidToSuppliers: -cashPaidToSuppliers,
+            cashPaidForOperatingExpenses: -cashPaidForOperatingExpenses,
+            netOperatingCashFlow,
+            assetAdditionsInPeriod: netInvestingCashFlow,
+            capitalInjectionsInPeriod,
+            loansDisbursedInPeriod,
+            loanRepaymentsInPeriod: -loanRepaymentsInPeriod,
+            partnerDrawingsInPeriod: -partnerDrawingsInPeriod,
+            netFinancingCashFlow,
+          },
+          indirectReconciliation,
         },
       },
     });

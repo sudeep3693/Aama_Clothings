@@ -8,6 +8,8 @@ import { toast } from "react-toastify";
 const Orders = () => {
   const { backendUrl, token, currency } = useContext(ShopContext);
   const [orderData, setOrderData] = useState([]);
+  const [trackingOrder, setTrackingOrder] = useState(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
 
   const loadOrderData = async () => {
     try {
@@ -29,6 +31,9 @@ const Orders = () => {
             item["paymentMethod"] = order.paymentMethod;
             item["date"] = order.date;
             item["orderAmount"] = order.amount;
+            item["orderId"] = order._id || order.id;
+            item["deliveryJobId"] = order.deliveryJobId;
+            item["fulfillmentStatus"] = order.fulfillmentStatus;
             allOrdersItem.push(item);
           });
         });
@@ -37,6 +42,24 @@ const Orders = () => {
     } catch (error) {
       console.log(error);
       toast.error(error.message);
+    }
+  };
+
+  const trackOrder = async (item) => {
+    if (!item.deliveryJobId) {
+      toast.info("Delivery tracking will appear after the package is handed to the courier.");
+      return;
+    }
+    setTrackingLoading(true);
+    try {
+      const response = await axios.get(`${backendUrl}/api/delivery/customer/${item.deliveryJobId}`, {
+        headers: { token },
+      });
+      if (response.data.success) setTrackingOrder({ item, delivery: response.data.delivery });
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Unable to load delivery tracking");
+    } finally {
+      setTrackingLoading(false);
     }
   };
 
@@ -108,16 +131,41 @@ const Orders = () => {
                   <p className="text-sm md:text-base">{item.status}</p>
                 </div>
                 <button
-                  onClick={loadOrderData}
+                  onClick={() => trackOrder(item)}
                   className="border px-4 py-2 text-sm font-medium rounded-sm"
                 >
-                  Track Order
+                  {trackingLoading ? "Loading..." : "Track Order"}
                 </button>
               </div>
             </div>
           );
         })}
       </div>
+      {trackingOrder && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setTrackingOrder(null)}>
+          <div className="bg-white w-full max-w-lg p-6 rounded-sm shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-gray-500">Delivery tracking</p>
+                <h2 className="text-lg font-semibold text-gray-900">{trackingOrder.item.name}</h2>
+              </div>
+              <button onClick={() => setTrackingOrder(null)} className="text-gray-500 text-xl" aria-label="Close tracking">x</button>
+            </div>
+            <div className="mt-5 space-y-4">
+              {trackingOrder.delivery.events?.map((event, index) => (
+                <div key={`${event.eventType}-${event.occurredAt}-${index}`} className="flex gap-3">
+                  <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-green-600 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{String(event.toState || event.eventType).replaceAll("_", " ")}</p>
+                    <p className="text-xs text-gray-500">{new Date(event.occurredAt).toLocaleString()}</p>
+                  </div>
+                </div>
+              ))}
+              {!trackingOrder.delivery.events?.length && <p className="text-sm text-gray-500">Tracking events are not available yet.</p>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

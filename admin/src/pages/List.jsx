@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { backendUrl, currency } from "../App";
 import { toast } from "react-toastify";
+import { Package, Eye, Edit3, Trash2, Layers, DollarSign, ShieldAlert, Check } from "lucide-react";
 
 const List = ({ token }) => {
   const [list, setList] = useState([]);
@@ -13,21 +14,20 @@ const List = ({ token }) => {
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editPrice, setEditPrice] = useState("");
-  const [editCostPrice, setEditCostPrice] = useState("");
   const [editDiscount, setEditDiscount] = useState("");
   const [editCategories, setEditCategories] = useState([]);
   const [editSubCategory, setEditSubCategory] = useState("");
   const [editBestseller, setEditBestseller] = useState(false);
   const [editNewInStore, setEditNewInStore] = useState(false);
   const [editPublished, setEditPublished] = useState(true);
-  const [editLowStockThreshold, setEditLowStockThreshold] = useState(5);
-  const [editVariants, setEditVariants] = useState([]);
-  const [variantSize, setVariantSize] = useState("S");
-  const [variantColor, setVariantColor] = useState("");
-  const [variantQty, setVariantQty] = useState("");
+  const [editSizes, setEditSizes] = useState([]);
+  const [editColors, setEditColors] = useState([]);
   const [editImage1, setEditImage1] = useState(null);
+
+  // Color options
   const [colorsList, setColorsList] = useState([]);
   const [categoriesList, setCategoriesList] = useState([]);
+  const [newColorInput, setNewColorInput] = useState("");
 
   const fetchList = async () => {
     try {
@@ -46,7 +46,7 @@ const List = ({ token }) => {
   };
 
   const removeProduct = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this product?")) return;
+    if (!window.confirm("Are you sure you want to delete this product? All hub inventories for this product will also be archived.")) return;
     try {
       const response = await axios.post(
         backendUrl + "/api/product/remove",
@@ -84,7 +84,7 @@ const List = ({ token }) => {
     }
   };
 
-  const parseCategories = (val) => {
+  const parseArray = (val) => {
     if (!val) return [];
     if (Array.isArray(val)) return val.filter(Boolean);
     if (typeof val === "string") {
@@ -105,23 +105,44 @@ const List = ({ token }) => {
     setEditName(product.name || "");
     setEditDescription(product.description || "");
     setEditPrice(product.price || "");
-    setEditCostPrice(product.costPrice !== undefined ? product.costPrice : 0);
     setEditDiscount(product.discount || 0);
+
     const cats =
       product.categories && product.categories.length > 0
         ? product.categories
-        : parseCategories(product.category);
+        : parseArray(product.category);
     setEditCategories(cats.length > 0 ? cats : ["Men"]);
+
     setEditSubCategory(product.subCategory || "");
     setEditBestseller(product.bestseller || false);
     setEditNewInStore(product.newInStore || false);
     setEditPublished(product.published !== undefined ? product.published : true);
-    setEditLowStockThreshold(product.lowStockThreshold !== undefined ? product.lowStockThreshold : 5);
-    setEditVariants(product.variants || []);
-    setVariantSize("S");
-    setVariantColor("");
-    setVariantQty("");
+
+    const szs = parseArray(product.sizes);
+    setEditSizes(szs.length > 0 ? szs : ["S", "M", "L"]);
+
+    const cols = parseArray(product.colors).map((c) => (typeof c === "object" ? c.name : c));
+    setEditColors(cols);
+
     setEditImage1(null);
+  };
+
+  const handleToggleSize = (size) => {
+    setEditSizes((prev) =>
+      prev.includes(size) ? (prev.length > 1 ? prev.filter((s) => s !== size) : prev) : [...prev, size]
+    );
+  };
+
+  const handleAddColor = (colorName) => {
+    if (!colorName) return;
+    if (!editColors.includes(colorName)) {
+      setEditColors([...editColors, colorName]);
+    }
+    setNewColorInput("");
+  };
+
+  const handleRemoveColor = (colorName) => {
+    setEditColors(editColors.filter((c) => c !== colorName));
   };
 
   const saveEditHandler = async (e) => {
@@ -130,30 +151,41 @@ const List = ({ token }) => {
       toast.error("Please select at least 1 category");
       return;
     }
+    if (editSizes.length === 0) {
+      toast.error("Please select at least 1 size");
+      return;
+    }
     try {
       const formData = new FormData();
-      formData.append("id", editingProduct._id);
+      formData.append("id", editingProduct._id || editingProduct.id);
       formData.append("name", editName);
       formData.append("description", editDescription);
       formData.append("price", editPrice);
-      formData.append("costPrice", editCostPrice || 0);
       formData.append("discount", editDiscount);
       formData.append("category", JSON.stringify(editCategories));
       formData.append("subCategory", editSubCategory);
-      
-      const computedStockQuantity = editVariants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0);
-      formData.append("stockQuantity", computedStockQuantity);
-      formData.append("lowStockThreshold", editLowStockThreshold);
-      
       formData.append("bestseller", editBestseller);
       formData.append("newInStore", editNewInStore);
       formData.append("published", editPublished);
-      
-      const allSizes = [...new Set(editVariants.map(v => v.size))];
-      const allColors = [...new Set(editVariants.map(v => v.color))];
-      formData.append("sizes", JSON.stringify(allSizes));
-      formData.append("colors", JSON.stringify(allColors));
-      formData.append("variants", JSON.stringify(editVariants));
+
+      // Sizes & Colors variant templates
+      formData.append("sizes", JSON.stringify(editSizes));
+      formData.append("colors", JSON.stringify(editColors));
+
+      // Build initial variant template combinations for manufacturers
+      const variantTemplates = [];
+      if (editColors.length > 0) {
+        editSizes.forEach((sz) => {
+          editColors.forEach((cl) => {
+            variantTemplates.push({ size: sz, color: cl });
+          });
+        });
+      } else {
+        editSizes.forEach((sz) => {
+          variantTemplates.push({ size: sz, color: "Standard" });
+        });
+      }
+      formData.append("variants", JSON.stringify(variantTemplates));
 
       if (editImage1) {
         formData.append("image1", editImage1);
@@ -166,7 +198,7 @@ const List = ({ token }) => {
       );
 
       if (response.data.success) {
-        toast.success(response.data.message);
+        toast.success(response.data.message || "Product varieties updated!");
         setEditingProduct(null);
         fetchList();
       } else {
@@ -186,7 +218,6 @@ const List = ({ token }) => {
       ]);
       if (colRes.data.success && colRes.data.colors.length > 0) {
         setColorsList(colRes.data.colors);
-        setVariantColor(colRes.data.colors[0].name);
       }
       if (catRes.data.success && catRes.data.categories.length > 0) {
         setCategoriesList(catRes.data.categories);
@@ -202,211 +233,230 @@ const List = ({ token }) => {
   }, []);
 
   return (
-    <>
-      <div className="flex justify-between items-center mb-4">
-        <p className="text-xl font-semibold">All Products Inventory</p>
+    <div className="space-y-5">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">Product Catalog Management</h1>
+          <p className="text-xs text-slate-500">
+            Define garment styles, retail pricing, and size/color varieties. Stock quantities are submitted by licensed manufacturer hubs.
+          </p>
+        </div>
         <button
           onClick={fetchList}
-          className="text-xs bg-gray-200 px-3 py-1.5 rounded hover:bg-gray-300"
+          className="text-xs font-semibold bg-white border border-slate-200 px-3.5 py-2 rounded-xl text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer"
         >
-          Refresh List
+          Refresh Catalog
         </button>
       </div>
 
-      <div className="flex flex-col gap-2">
-        {/* --- List Table Title --- */}
-        <div className="hidden md:grid grid-cols-[1fr_2.5fr_1fr_1.2fr_1.2fr_1.2fr_1.5fr] items-center py-2 px-3 border bg-gray-100 text-sm font-medium">
-          <b>Image</b>
-          <b>Name</b>
-          <b>Category</b>
-          <b>Price</b>
-          <b>Stock Status</b>
-          <b>Publishing</b>
-          <b className="text-center">Actions</b>
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-bold tracking-wider border-b border-slate-100">
+              <tr>
+                <th className="py-3 px-4">Garment</th>
+                <th className="py-3 px-4">Categories</th>
+                <th className="py-3 px-4">Retail Price</th>
+                <th className="py-3 px-4">Varieties (Admin Locked)</th>
+                <th className="py-3 px-4 text-center">Hub Network Stock</th>
+                <th className="py-3 px-4 text-center">Status</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-medium">
+              {list.map((item, index) => {
+                const sizes = parseArray(item.sizes);
+                const colors = parseArray(item.colors);
+                const isOutOfStock = (item.stockQuantity || 0) <= 0;
+                const isLowStock = (item.stockQuantity || 0) <= 5 && !isOutOfStock;
+
+                return (
+                  <tr key={index} className={`hover:bg-slate-50/80 transition-colors ${!item.published ? "bg-slate-50/50" : ""}`}>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <img
+                          className="w-11 h-11 object-cover rounded-xl border border-slate-200"
+                          src={Array.isArray(item.image) ? item.image[0] : item.image}
+                          alt=""
+                        />
+                        <div>
+                          <p className="font-bold text-slate-900">{item.name}</p>
+                          <span className="text-[10px] text-slate-400">Sub: {item.subCategory || "General"}</span>
+                          <div className="flex gap-1 mt-0.5">
+                            {item.newInStore && (
+                              <span className="text-[9px] bg-amber-100 text-amber-900 px-1 py-0.2 rounded font-bold">
+                                New In Store
+                              </span>
+                            )}
+                            {item.bestseller && (
+                              <span className="text-[9px] bg-yellow-100 text-yellow-800 px-1 py-0.2 rounded font-bold">
+                                Bestseller
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="py-3 px-4">
+                      <div className="flex flex-wrap gap-1 max-w-[140px]">
+                        {(item.categories && item.categories.length > 0
+                          ? item.categories
+                          : parseArray(item.category)
+                        ).map((cat, i) => (
+                          <span
+                            key={i}
+                            className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100"
+                          >
+                            {cat}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+
+                    <td className="py-3 px-4">
+                      {item.discount > 0 ? (
+                        <div>
+                          <span className="font-bold text-rose-600">
+                            {currency}{Math.round(item.price * (1 - item.discount / 100))}
+                          </span>{" "}
+                          <span className="line-through text-[10px] text-slate-400">{currency}{item.price}</span>
+                        </div>
+                      ) : (
+                        <span className="font-bold text-slate-900">{currency}{item.price}</span>
+                      )}
+                    </td>
+
+                    <td className="py-3 px-4">
+                      <div className="text-[11px] text-slate-600 space-y-0.5">
+                        <p><strong className="text-slate-800">Sizes:</strong> {sizes.join(", ") || "None"}</p>
+                        {colors.length > 0 && (
+                          <p className="text-slate-500">
+                            <strong>Colors:</strong> {colors.map(c => typeof c === 'object' ? c.name : c).join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Network Hub Stock (Decentralized, read-only) */}
+                    <td className="py-3 px-4 text-center">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
+                          isOutOfStock
+                            ? "bg-rose-100 text-rose-800"
+                            : isLowStock
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-emerald-100 text-emerald-800"
+                        }`}
+                      >
+                        {item.stockQuantity || 0} units
+                      </span>
+                      <p className="text-[9px] text-slate-400 mt-0.5">Managed by Hubs</p>
+                    </td>
+
+                    {/* Publishing Status */}
+                    <td className="py-3 px-4 text-center">
+                      <button
+                        onClick={() => togglePublishHandler(item._id || item.id)}
+                        className={`text-[11px] px-2.5 py-1 rounded-full font-bold cursor-pointer transition-colors ${
+                          item.published
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                            : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+                        }`}
+                      >
+                        {item.published ? "Live" : "Draft"}
+                      </button>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => openEditModal(item)}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer shadow-2xs"
+                        >
+                          Edit Varieties
+                        </button>
+                        <button
+                          onClick={() => removeProduct(item._id || item.id)}
+                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-
-        {/* --- Product List --- */}
-        {list.map((item, index) => (
-          <div
-            className={`grid grid-cols-[1fr_2fr_1fr] md:grid-cols-[1fr_2.5fr_1fr_1.2fr_1.2fr_1.2fr_1.5fr] items-center gap-2 py-2 px-3 border text-sm rounded ${
-              !item.published ? "bg-gray-50 opacity-75" : "bg-white"
-            }`}
-            key={index}
-          >
-            <img className="w-12 h-12 object-cover rounded" src={item.image[0]} alt="" />
-            <div>
-              <p className="font-medium text-gray-800">{item.name}</p>
-              <div className="flex flex-wrap gap-1 mt-0.5">
-                {item.newInStore && (
-                  <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded font-bold">
-                    New in Store
-                  </span>
-                )}
-                {item.bestseller && (
-                  <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-semibold">
-                    Bestseller
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {(item.categories && item.categories.length > 0
-                ? item.categories
-                : parseCategories(item.category)
-              ).map((cat, i) => (
-                <span
-                  key={i}
-                  className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200"
-                >
-                  {cat}
-                </span>
-              ))}
-            </div>
-            <div>
-              {item.discount > 0 ? (
-                <div>
-                  <span className="font-semibold text-red-600">
-                    {currency}{Math.round(item.price * (1 - item.discount / 100))}
-                  </span>{" "}
-                  <span className="line-through text-xs text-gray-400">{currency}{item.price}</span>
-                </div>
-              ) : (
-                <span className="font-medium">{currency}{item.price}</span>
-              )}
-            </div>
-
-            {/* Stock Status Badge */}
-            <div>
-              {item.stockQuantity <= 0 ? (
-                <span className="bg-red-100 text-red-700 text-xs font-semibold px-2 py-1 rounded">
-                  Out of Stock
-                </span>
-              ) : item.stockQuantity <= (item.lowStockThreshold || 5) ? (
-                <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-1 rounded border border-amber-300">
-                  ⚠️ Low Stock ({item.stockQuantity})
-                </span>
-              ) : (
-                <span className="bg-green-100 text-green-700 text-xs font-semibold px-2 py-1 rounded">
-                  In Stock
-                </span>
-              )}
-              {item.stockQuantity > (item.lowStockThreshold || 5) && (
-                <p className="text-[10px] text-gray-500 mt-0.5">
-                  {item.stockQuantity} left
-                </p>
-              )}
-            </div>
-
-            {/* Publish Toggle Button */}
-            <div>
-              <button
-                onClick={() => togglePublishHandler(item._id)}
-                className={`text-xs px-2.5 py-1 rounded font-semibold transition-colors ${
-                  item.published
-                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200"
-                    : "bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200"
-                }`}
-              >
-                {item.published ? "✓ Published" : "✕ Unpublished"}
-              </button>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center justify-center gap-2">
-              <button
-                onClick={() => openEditModal(item)}
-                className="bg-gray-800 text-white text-xs px-2.5 py-1 rounded hover:bg-gray-700"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => removeProduct(item._id)}
-                className="bg-red-600 text-white text-xs px-2.5 py-1 rounded hover:bg-red-700"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
       </div>
 
-      {/* --- EDIT PRODUCT MODAL --- */}
+      {/* --- EDIT PRODUCT MODAL (Admin defines varieties & pricing) --- */}
       {editingProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl">
-            <h3 className="text-xl font-bold mb-4">Edit Product Details</h3>
-            <form onSubmit={saveEditHandler} className="flex flex-col gap-4 text-sm">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex justify-center items-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-6 max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+            <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
               <div>
-                <label className="block mb-1 font-medium">Product Name</label>
+                <h3 className="text-base font-bold text-slate-900">Edit Garment Varieties &amp; Selling Details</h3>
+                <p className="text-xs text-slate-500">Configure size &amp; color specifications. Physical inventory count is updated by manufacturers.</p>
+              </div>
+              <button onClick={() => setEditingProduct(null)} className="text-slate-400 hover:text-slate-600 text-sm font-bold">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={saveEditHandler} className="flex flex-col gap-4 text-xs">
+              <div>
+                <label className="block mb-1 font-bold text-slate-700">Garment / Product Name</label>
                 <input
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full border px-3 py-2 rounded"
+                  className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-indigo-500"
                   required
                 />
               </div>
 
               <div>
-                <label className="block mb-1 font-medium">Description</label>
+                <label className="block mb-1 font-bold text-slate-700">Description</label>
                 <textarea
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
-                  className="w-full border px-3 py-2 rounded h-20"
+                  className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-slate-900 font-medium h-20 focus:outline-none focus:border-indigo-500"
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block mb-1 font-medium text-xs">Selling Price ({currency})</label>
+                  <label className="block mb-1 font-bold text-slate-700">Store Selling Price ({currency})</label>
                   <input
                     type="number"
                     value={editPrice}
                     onChange={(e) => setEditPrice(e.target.value)}
-                    className="w-full border px-2.5 py-1.5 rounded text-sm"
+                    className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-slate-900 font-bold focus:outline-none focus:border-indigo-500"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block mb-1 font-medium text-xs text-emerald-900">Cost Price ({currency})</label>
-                  <input
-                    type="number"
-                    value={editCostPrice}
-                    onChange={(e) => setEditCostPrice(e.target.value)}
-                    className="w-full border border-emerald-300 bg-emerald-50/30 px-2.5 py-1.5 rounded text-sm"
-                    min="0"
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 font-medium text-xs">Discount (%)</label>
+                  <label className="block mb-1 font-bold text-slate-700">Discount Percentage (%)</label>
                   <input
                     type="number"
                     value={editDiscount}
                     onChange={(e) => setEditDiscount(e.target.value)}
-                    className="w-full border px-2.5 py-1.5 rounded text-sm"
+                    className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-slate-900 font-bold focus:outline-none focus:border-indigo-500"
                     min="0"
                     max="100"
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 font-medium text-xs text-amber-900">Low Stock Alert</label>
-                  <input
-                    type="number"
-                    value={editLowStockThreshold}
-                    onChange={(e) => setEditLowStockThreshold(e.target.value)}
-                    className="w-full border border-amber-300 bg-amber-50/30 px-2.5 py-1.5 rounded text-sm"
-                    min="1"
-                    placeholder="5"
                   />
                 </div>
               </div>
 
               {/* Multi-category Selector */}
-              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
                 <div className="flex justify-between items-center">
-                  <label className="font-semibold text-xs text-gray-700">Categories (Select 1 or more)</label>
+                  <label className="font-bold text-slate-700">Categories (Target Segments)</label>
                   <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full">
                     {editCategories.length} selected
                   </span>
@@ -427,10 +477,10 @@ const List = ({ token }) => {
                               : [...prev, c.name]
                           );
                         }}
-                        className={`px-2.5 py-1 rounded text-xs font-semibold border transition-all ${
+                        className={`px-3 py-1 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                           isSelected
-                            ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
-                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                            ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
                         }`}
                       >
                         {isSelected ? "✓ " : "+ "}
@@ -442,162 +492,153 @@ const List = ({ token }) => {
               </div>
 
               <div>
-                <label className="block mb-1 font-medium">Sub Category (Type)</label>
+                <label className="block mb-1 font-bold text-slate-700">Sub Category (Garment Type)</label>
                 <input
                   type="text"
                   value={editSubCategory}
                   onChange={(e) => setEditSubCategory(e.target.value)}
-                  className="w-full border px-3 py-2 rounded"
+                  className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-slate-900 focus:outline-none focus:border-indigo-500"
                   required
                 />
               </div>
 
+              {/* SIZES CONFIGURATION */}
               <div>
-                <p className="block mb-1 font-medium">Variants</p>
-                <div className="flex gap-3 mb-3 items-end">
-                  <div>
-                    <p className="text-xs mb-1">Size</p>
+                <label className="block mb-1 font-bold text-slate-700">
+                  Allowed Sizes (Manufacturers will maintain stock for these)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {["XS", "S", "M", "L", "XL", "XXL", "3XL"].map((sz) => {
+                    const active = editSizes.includes(sz);
+                    return (
+                      <button
+                        key={sz}
+                        type="button"
+                        onClick={() => handleToggleSize(sz)}
+                        className={`px-3 py-1.5 rounded-xl font-bold border cursor-pointer transition-all ${
+                          active
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        {sz}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* COLORS CONFIGURATION */}
+              <div>
+                <label className="block mb-1 font-bold text-slate-700">
+                  Allowed Color Varieties
+                </label>
+                <div className="flex gap-2 mb-2">
+                  {colorsList.length > 0 ? (
                     <select
-                      value={variantSize}
-                      onChange={(e) => setVariantSize(e.target.value)}
-                      className="border px-2 py-1 rounded"
+                      value={newColorInput}
+                      onChange={(e) => setNewColorInput(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs flex-1 focus:outline-none"
                     >
-                      {["S", "M", "L", "XL", "XXL"].map((sz) => (
-                        <option key={sz} value={sz}>{sz}</option>
+                      <option value="">Select a color to add...</option>
+                      {colorsList.map((c) => (
+                        <option key={c.id} value={c.name}>{c.name}</option>
                       ))}
                     </select>
-                  </div>
-                  <div>
-                    <p className="text-xs mb-1">Color</p>
-                    {colorsList.length > 0 ? (
-                      <select
-                        value={variantColor}
-                        onChange={(e) => setVariantColor(e.target.value)}
-                        className="border px-2 py-1 rounded w-28"
-                      >
-                        {colorsList.map((c) => (
-                          <option key={c.id} value={c.name}>{c.name}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        placeholder="e.g. Red"
-                        value={variantColor}
-                        onChange={(e) => setVariantColor(e.target.value)}
-                        className="border px-2 py-1 rounded w-24"
-                      />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-xs mb-1">Qty</p>
+                  ) : (
                     <input
-                      type="number"
-                      min="0"
-                      placeholder="0"
-                      value={variantQty}
-                      onChange={(e) => setVariantQty(e.target.value)}
-                      className="border px-2 py-1 rounded w-16"
+                      type="text"
+                      placeholder="e.g. Navy Blue"
+                      value={newColorInput}
+                      onChange={(e) => setNewColorInput(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs flex-1 focus:outline-none"
                     />
-                  </div>
+                  )}
                   <button
                     type="button"
-                    onClick={() => {
-                      if (variantColor && variantQty !== "") {
-                        setEditVariants([...editVariants, { size: variantSize, color: variantColor, quantity: Number(variantQty) }]);
-                        setVariantColor("");
-                        setVariantQty("");
-                      }
-                    }}
-                    className="bg-black text-white px-3 py-1 rounded text-sm mb-[1px]"
+                    onClick={() => handleAddColor(newColorInput)}
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold cursor-pointer shadow-xs"
                   >
-                    Add
+                    + Add Color
                   </button>
                 </div>
-                <div className="flex flex-col gap-2 max-w-sm">
-                  {editVariants.map((v, idx) => (
-                    <div key={idx} className="flex justify-between items-center bg-slate-100 px-3 py-2 rounded text-sm border">
-                      <span>{v.size} / {v.color} - Qty: {v.quantity}</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {editColors.map((colorName, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-800 rounded-lg text-xs font-semibold border border-slate-200"
+                    >
+                      {colorName}
                       <button
                         type="button"
-                        onClick={() => setEditVariants(editVariants.filter((_, i) => i !== idx))}
-                        className="text-red-500 font-bold hover:text-red-700"
+                        onClick={() => handleRemoveColor(colorName)}
+                        className="text-rose-500 font-black hover:text-rose-700 cursor-pointer ml-1"
                       >
-                        X
+                        ×
                       </button>
-                    </div>
+                    </span>
                   ))}
                 </div>
               </div>
 
-              <div>
-                <label className="block mb-1 font-medium">Publishing</label>
-                <select
-                  value={editPublished ? "true" : "false"}
-                  onChange={(e) => setEditPublished(e.target.value === "true")}
-                  className="w-full border px-3 py-2 rounded"
-                >
-                  <option value="true">Published</option>
-                  <option value="false">Unpublished</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block mb-1 font-medium">Replace Primary Image (Optional)</label>
-                <input
-                  type="file"
-                  onChange={(e) => setEditImage1(e.target.files[0])}
-                  className="w-full text-xs"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
+              {/* Publishing & Feature toggles */}
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     id="editBestseller"
                     checked={editBestseller}
                     onChange={(e) => setEditBestseller(e.target.checked)}
+                    className="cursor-pointer"
                   />
-                  <label htmlFor="editBestseller" className="cursor-pointer text-sm">
-                    Bestseller Product
+                  <label htmlFor="editBestseller" className="cursor-pointer font-bold text-slate-700">
+                    Bestseller
                   </label>
                 </div>
 
-                <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded">
+                <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     id="editNewInStore"
                     checked={editNewInStore}
                     onChange={(e) => setEditNewInStore(e.target.checked)}
-                    className="accent-amber-600 cursor-pointer"
+                    className="cursor-pointer"
                   />
-                  <label htmlFor="editNewInStore" className="cursor-pointer text-xs font-semibold text-amber-900">
-                    Feature as &quot;New in Store&quot; (Only 1 product active)
+                  <label htmlFor="editNewInStore" className="cursor-pointer font-bold text-amber-800">
+                    New in Store Flag
                   </label>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-4">
+              <div>
+                <label className="block mb-1 font-bold text-slate-700">Replace Primary Image (Optional)</label>
+                <input
+                  type="file"
+                  onChange={(e) => setEditImage1(e.target.files[0])}
+                  className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setEditingProduct(null)}
-                  className="px-4 py-2 border rounded text-gray-600 hover:bg-gray-100"
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-100 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-black text-white rounded hover:bg-gray-800"
+                  className="px-5 py-2 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 cursor-pointer shadow-xs"
                 >
-                  Save Changes
+                  Save Varieties &amp; Price
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 

@@ -1,5 +1,6 @@
 import { prisma } from "../config/db.js";
 import jwt from "jsonwebtoken";
+import { syncManufacturerRatingForProduct } from "../services/manufacturerRatingService.js";
 
 // Helper: Safely parse JSON array field from Prisma
 const parseJsonArray = (val) => {
@@ -112,6 +113,12 @@ const addReview = async (req, res) => {
           date: BigInt(Date.now()),
         },
       });
+
+      // Synchronize manufacturer ratings dynamically based on customer review
+      syncManufacturerRatingForProduct(productId, userId).catch((err) =>
+        console.error("Error syncing manufacturer rating on review update:", err)
+      );
+
       return res.json({ success: true, message: "Review updated successfully!" });
     }
 
@@ -131,6 +138,11 @@ const addReview = async (req, res) => {
         date: BigInt(Date.now()),
       },
     });
+
+    // Synchronize manufacturer ratings dynamically based on customer review
+    syncManufacturerRatingForProduct(productId, userId).catch((err) =>
+      console.error("Error syncing manufacturer rating on new review:", err)
+    );
 
     res.json({ success: true, message: "Review submitted successfully!" });
   } catch (error) {
@@ -376,7 +388,12 @@ const deleteUserReview = async (req, res) => {
       return res.json({ success: false, message: "Review not found or unauthorized" });
     }
 
+    const productId = review.productId;
     await prisma.review.delete({ where: { id: reviewId } });
+
+    syncManufacturerRatingForProduct(productId, userId).catch((err) =>
+      console.error("Error syncing manufacturer rating on review delete:", err)
+    );
 
     res.json({ success: true, message: "Review deleted successfully" });
   } catch (error) {
@@ -464,7 +481,13 @@ const adminDeleteReview = async (req, res) => {
       return res.json({ success: false, message: "Review not found" });
     }
 
+    const productId = review.productId;
+    const userId = review.userId;
     await prisma.review.delete({ where: { id: reviewId } });
+
+    syncManufacturerRatingForProduct(productId, userId).catch((err) =>
+      console.error("Error syncing manufacturer rating on admin review delete:", err)
+    );
 
     res.json({ success: true, message: "Review removed successfully by admin" });
   } catch (error) {
