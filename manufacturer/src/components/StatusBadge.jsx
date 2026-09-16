@@ -22,11 +22,11 @@ export const StatusBadge = ({ status }) => {
           dot: "bg-indigo-500 animate-pulse",
           label: "In Production / Packing",
         };
-      case "packaged":
+      case "packed":
         return {
           bg: "bg-purple-50 text-purple-700 border-purple-200",
           dot: "bg-purple-500",
-          label: "Packaged",
+          label: "Packed",
         };
       case "ready_for_pickup":
         return {

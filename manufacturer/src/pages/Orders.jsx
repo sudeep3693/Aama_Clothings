@@ -55,7 +55,7 @@ const Orders = () => {
         const pending = list.filter((a) => a.status === "assigned").length;
         const accepted = list.filter((a) => a.status === "accepted").length;
         const preparing = list.filter((a) => a.status === "preparing").length;
-        const packaged = list.filter((a) => a.status === "packaged").length;
+        const packed = list.filter((a) => a.status === "packed").length;
         const ready = list.filter((a) => a.status === "ready_for_pickup").length;
         const delivered = list.filter((a) => a.status === "delivered").length;
 
@@ -63,11 +63,11 @@ const Orders = () => {
           pending,
           accepted,
           preparing,
-          packaged,
+          packed,
           ready,
           delivered,
           total: list.length,
-          active: accepted + preparing + packaged + ready,
+          active: accepted + preparing + packed + ready,
         });
       }
     } catch (err) {
@@ -182,7 +182,7 @@ const Orders = () => {
       return false;
     if (
       activeTab === "ready" &&
-      item.status !== "packaged" &&
+      item.status !== "packed" &&
       item.status !== "ready_for_pickup"
     )
       return false;
@@ -216,7 +216,7 @@ const Orders = () => {
     all: assignments.length,
     pending: assignments.filter((a) => a.status === "assigned").length,
     production: assignments.filter((a) => ["accepted", "preparing"].includes(a.status)).length,
-    ready: assignments.filter((a) => ["packaged", "ready_for_pickup"].includes(a.status)).length,
+    ready: assignments.filter((a) => ["packed", "ready_for_pickup"].includes(a.status)).length,
     completed: assignments.filter((a) => ["picked_up", "in_transit", "delivered"].includes(a.status)).length,
     rejected: assignments.filter((a) => ["rejected", "cancelled"].includes(a.status)).length,
   };
@@ -262,7 +262,7 @@ const Orders = () => {
           { id: "all", label: "All Assigned Orders", count: tabCounts.all },
           { id: "pending", label: "Pending Acceptance", count: tabCounts.pending, color: "text-rose-600" },
           { id: "production", label: "In Production / Stitching", count: tabCounts.production },
-          { id: "ready", label: "Packaged & Ready for Courier", count: tabCounts.ready },
+          { id: "ready", label: "Packed & Ready for Courier", count: tabCounts.ready },
           { id: "completed", label: "Delivered / In Transit", count: tabCounts.completed },
           { id: "rejected", label: "Declined", count: tabCounts.rejected },
         ].map((tab) => (
@@ -516,7 +516,7 @@ const Orders = () => {
 
                       {item.status === "preparing" && (
                         <button
-                          onClick={() => handleUpdateStatus(item.id, "packaged")}
+                          onClick={() => handleUpdateStatus(item.id, "packed")}
                           className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs shadow-xs cursor-pointer transition-colors flex items-center justify-center gap-1.5"
                         >
                           <ShieldCheck className="w-4 h-4" />
@@ -524,7 +524,7 @@ const Orders = () => {
                         </button>
                       )}
 
-                      {item.status === "packaged" && (
+                      {item.status === "packed" && (
                         <div className="space-y-2">
                           <button
                             onClick={() => handleUpdateStatus(item.id, "ready_for_pickup")}
@@ -548,12 +548,9 @@ const Orders = () => {
                           <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] font-semibold text-center">
                             🚚 Awaiting Delivery Fleet Pickup
                           </div>
-                          <button
-                            onClick={() => handleUpdateStatus(item.id, "delivered")}
-                            className="w-full py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl font-bold text-xs hover:bg-emerald-100 cursor-pointer"
-                          >
-                            ✓ Mark Handed Over / Delivered
-                          </button>
+                          <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-[11px] text-center">
+                            Delivery progress will update automatically from Nepal Can Move.
+                          </div>
                         </div>
                       )}
 

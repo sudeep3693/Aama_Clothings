@@ -335,16 +335,16 @@ const OrderDetail = () => {
             {assignment.status === "preparing" && (
               <div className="space-y-2">
                 <button
-                  onClick={() => handleStatusChange("packaged")}
+                  onClick={() => handleStatusChange("packed")}
                   disabled={actionLoading}
                   className="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-xs cursor-pointer disabled:opacity-50"
                 >
-                  Mark as Packaged &amp; Sealed
+                  Mark as Packed &amp; Sealed
                 </button>
               </div>
             )}
 
-            {assignment.status === "packaged" && (
+            {assignment.status === "packed" && (
               <div className="space-y-2">
                 <button
                   onClick={handleMarkReadyForPickup}

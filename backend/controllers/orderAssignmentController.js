@@ -441,11 +441,20 @@ const updateAssignmentStatus = async (req, res) => {
     const assignmentId = req.params?.id || req.body?.assignmentId || req.body?.id;
     const { status, packagingNotes } = req.body;
 
+    const normalizedStatus = String(status || "").toLowerCase();
+    const manufacturerStatuses = new Set(["accepted", "preparing", "quality_check", "packed"]);
+    if (!manufacturerStatuses.has(normalizedStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Carrier delivery states are controlled by the NCM integration. Use the dedicated ready-for-delivery action for handoff.",
+      });
+    }
+
     const assignment = await prisma.orderAssignment.findUnique({ where: { id: assignmentId } });
     if (!assignment || assignment.manufacturerId !== manufacturerId)
       return res.json({ success: false, message: "Assignment not found" });
 
-    const updateData = { status: status.toLowerCase() };
+    const updateData = { status: normalizedStatus };
     if (packagingNotes !== undefined) updateData.notes = packagingNotes;
 
     await prisma.orderAssignment.update({ where: { id: assignmentId }, data: updateData });

@@ -27,7 +27,7 @@ const Dashboard = () => {
     pending: 0,
     accepted: 0,
     preparing: 0,
-    packaged: 0,
+    packed: 0,
     ready: 0,
     delivered: 0,
     total: 0,
@@ -48,7 +48,7 @@ const Dashboard = () => {
         const pending = list.filter((a) => a.status === "assigned").length;
         const accepted = list.filter((a) => a.status === "accepted").length;
         const preparing = list.filter((a) => a.status === "preparing").length;
-        const packaged = list.filter((a) => a.status === "packaged").length;
+        const packed = list.filter((a) => a.status === "packed").length;
         const ready = list.filter((a) => a.status === "ready_for_pickup").length;
         const delivered = list.filter((a) => a.status === "delivered").length;
 
@@ -56,11 +56,11 @@ const Dashboard = () => {
           pending,
           accepted,
           preparing,
-          packaged,
+          packed,
           ready,
           delivered,
           total: list.length,
-          active: accepted + preparing + packaged + ready,
+          active: accepted + preparing + packed + ready,
         };
         setHubStats(currentCounts);
         setStats(currentCounts);
@@ -205,7 +205,7 @@ const Dashboard = () => {
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-black text-slate-900">
-              {hubStats.packaged + hubStats.ready}
+              {hubStats.packed + hubStats.ready}
             </span>
             <span className="text-[11px] text-emerald-600 font-medium">Awaiting driver</span>
           </div>

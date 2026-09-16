@@ -205,7 +205,7 @@ const Performance = () => {
             <div>
               <p className="font-bold text-slate-900">24-Hour Packaging Dispatch SLA</p>
               <p className="text-slate-500 text-[11px] mt-0.5">
-                Assigned orders must be packaged and marked ready for delivery partner pickup within 24 hours.
+                Assigned orders must be packed and marked ready for delivery partner pickup within 24 hours.
               </p>
             </div>
           </div>

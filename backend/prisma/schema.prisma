@@ -20,26 +20,26 @@ model User {
 }
 
 model Product {
-  id              String  @id @default(uuid())
-  name            String
-  description     String  @db.Text
-  price           Float
-  image           Json
-  category        String
-  subCategory     String
-  sizes           Json
-  colors          Json    @default("[]")
-  variants        Json    @default("[]")
-  bestseller      Boolean   @default(false)
-  newInStore      Boolean   @default(false)
-  isSpecialOffer  Boolean   @default(false)
-  offerTag        String?   @default("")
-  offerEndDate    DateTime?
-  discount        Float     @default(0)
-  costPrice       Float     @default(0)
-  stockQuantity     Int     @default(0)
-  lowStockThreshold Int     @default(5)
-  published         Boolean @default(true)
+  id                String    @id @default(uuid())
+  name              String
+  description       String    @db.Text
+  price             Float
+  image             Json
+  category          String
+  subCategory       String
+  sizes             Json
+  colors            Json      @default("[]")
+  variants          Json      @default("[]")
+  bestseller        Boolean   @default(false)
+  newInStore        Boolean   @default(false)
+  isSpecialOffer    Boolean   @default(false)
+  offerTag          String?   @default("")
+  offerEndDate      DateTime?
+  discount          Float     @default(0)
+  costPrice         Float     @default(0)
+  stockQuantity     Int       @default(0)
+  lowStockThreshold Int       @default(5)
+  published         Boolean   @default(true)
   date              BigInt
 
   @@index([published])
@@ -48,26 +48,27 @@ model Product {
 }
 
 model Order {
-  id                  String  @id @default(uuid())
-  userId              String
-  items               Json
-  amount              Float
-  address             Json
-  status              String  @default("Order Placed")
-  paymentMethod       String
-  payment             Boolean @default(false)
-  date                BigInt
-  loyaltyDiscount     Float?  @default(0)
-  rewardApplied       Json?
+  id                String         @id @default(uuid())
+  userId            String
+  items             Json
+  amount            Float
+  address           Json
+  status            String         @default("Order Placed")
+  paymentMethod     String
+  payment           Boolean        @default(false)
+  date              BigInt
+  loyaltyDiscount   Float?         @default(0)
+  rewardApplied     Json?
   // Fulfillment tracking
-  fulfillmentStatus   String  @default("PENDING_ASSIGNMENT")
+  fulfillmentStatus String         @default("PENDING_ASSIGNMENT")
   // PENDING_ASSIGNMENT | ASSIGNED | ACCEPTED | MANUFACTURING | QUALITY_CHECK | PACKED | READY_FOR_PICKUP | PICKED_UP | IN_TRANSIT | DELIVERED | FAILED
-  assignmentId        String?
-  deliveryJobId       String?
-  orderType           String  @default("ONLINE_STORE") // ONLINE_STORE | DIRECT_MANUFACTURER
-  directOrderType     String? @default("") // HUB_VISIT | PHONE_ORDER
-  manufacturerId      String? // Fulfilled directly by manufacturer
-  directNotes         String? @db.Text
+  assignmentId      String?
+  deliveryJobId     String?
+  orderType         String         @default("ONLINE_STORE") // ONLINE_STORE | DIRECT_MANUFACTURER
+  directOrderType   String?        @default("") // HUB_VISIT | PHONE_ORDER
+  manufacturerId    String? // Fulfilled directly by manufacturer
+  directNotes       String?        @db.Text
+  deliveryOrder     DeliveryOrder?
 
   @@index([fulfillmentStatus])
   @@index([userId])
@@ -182,25 +183,25 @@ model StockLog {
 }
 
 model InboundShipment {
-  id               String   @id @default(uuid())
-  batchNumber      String   @unique
-  supplierName     String   @default("") // Whom purchased from
-  invoiceNumber    String?  @default("")
-  carrier          String   @default("Local Freight")
-  shipmentDate     DateTime
-  totalFreightCost Float    @default(0)
-  customsOrTaxes   Float    @default(0)
-  totalItemsCost   Float    @default(0)
-  totalLandedCost  Float    @default(0)
+  id                String   @id @default(uuid())
+  batchNumber       String   @unique
+  supplierName      String   @default("") // Whom purchased from
+  invoiceNumber     String?  @default("")
+  carrier           String   @default("Local Freight")
+  shipmentDate      DateTime
+  totalFreightCost  Float    @default(0)
+  customsOrTaxes    Float    @default(0)
+  totalItemsCost    Float    @default(0)
+  totalLandedCost   Float    @default(0)
   paidFromAccountId String?
-  paidAmount       Float    @default(0)
-  payableAmount    Float    @default(0)
-  payableId        String?
-  paymentStatus    String   @default("PAID") // PAID, PARTIALLY_PAID, PAYABLE_UNPAID
-  notes            String?  @db.Text
-  items            Json     @default("[]")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  paidAmount        Float    @default(0)
+  payableAmount     Float    @default(0)
+  payableId         String?
+  paymentStatus     String   @default("PAID") // PAID, PARTIALLY_PAID, PAYABLE_UNPAID
+  notes             String?  @db.Text
+  items             Json     @default("[]")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model MonthlyExpense {
@@ -222,7 +223,7 @@ model MonthlyExpense {
 model Admin {
   id        String   @id @default(uuid())
   email     String   @unique
-  password  String   // bcrypt-hashed
+  password  String // bcrypt-hashed
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -247,10 +248,10 @@ model CashTransaction {
   id            String            @id @default(uuid())
   date          DateTime          @default(now())
   amount        Float
-  type          String            // INFLOW, OUTFLOW, TRANSFER
+  type          String // INFLOW, OUTFLOW, TRANSFER
   fromAccountId String?
   toAccountId   String?
-  category      String            // SALES, SUPPLIER_PAYMENT, EXPENSE, CAPITAL_INJECTION, DRAWINGS, LOAN_DISBURSEMENT, LOAN_REPAYMENT, ASSET_PURCHASE, REFUND, INTERNAL_TRANSFER
+  category      String // SALES, SUPPLIER_PAYMENT, EXPENSE, CAPITAL_INJECTION, DRAWINGS, LOAN_DISBURSEMENT, LOAN_REPAYMENT, ASSET_PURCHASE, REFUND, INTERNAL_TRANSFER
   partyName     String?           @default("") // Whom paid to / Whom received from
   invoiceNumber String?           @default("")
   referenceId   String?           @default("")
@@ -269,7 +270,7 @@ model FixedAsset {
   id                      String    @id @default(uuid())
   assetName               String
   assetTag                String    @unique
-  category                String    // COMPUTERS_IT, FURNITURE_FIXTURES, VEHICLES, MACHINERY_EQUIPMENT, LEASEHOLD_IMPROVEMENTS
+  category                String // COMPUTERS_IT, FURNITURE_FIXTURES, VEHICLES, MACHINERY_EQUIPMENT, LEASEHOLD_IMPROVEMENTS
   vendorName              String?   @default("") // Whom purchased from
   invoiceNumber           String?   @default("")
   purchaseDate            DateTime
@@ -301,7 +302,7 @@ model PartnerEquity {
   role                       String   @default("PARTNER") // FOUNDER, CO_FOUNDER, ANGEL_INVESTOR, INSTITUTIONAL_INVESTOR, PARTNER
   shareCount                 Float    @default(0) // Number of shares held
   sharePrice                 Float    @default(100) // Price per share at issuance / acquisition
-  ownershipPercentage        Float    // e.g. 50.0 (Strictly normalized in cap table)
+  ownershipPercentage        Float // e.g. 50.0 (Strictly normalized in cap table)
   initialCapital             Float    @default(0)
   currentCapital             Float    @default(0)
   totalDrawings              Float    @default(0)
@@ -315,35 +316,35 @@ model PartnerEquity {
 }
 
 model CompanyValuation {
-  id                  String   @id @default(uuid())
-  roundName           String   // e.g. "Incorporation / Founder Round", "Seed Round", "Series A"
-  effectiveDate       DateTime @default(now())
-  preMoneyValuation   Float    @default(0)
-  investmentAmount    Float    @default(0)
-  postMoneyValuation  Float    @default(0)
-  totalPreShares      Float    @default(0)
-  newSharesIssued     Float    @default(0)
-  totalPostShares     Float    @default(0)
-  sharePrice          Float    @default(100)
-  valuationMethod     String   @default("EQUITY_ROUND") // EQUITY_ROUND, DCF, MULTIPLE, BOOK_VALUE, MANUAL_REVALUATION
-  leadInvestor        String?  @default("")
-  notes               String?  @db.Text
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  roundName          String // e.g. "Incorporation / Founder Round", "Seed Round", "Series A"
+  effectiveDate      DateTime @default(now())
+  preMoneyValuation  Float    @default(0)
+  investmentAmount   Float    @default(0)
+  postMoneyValuation Float    @default(0)
+  totalPreShares     Float    @default(0)
+  newSharesIssued    Float    @default(0)
+  totalPostShares    Float    @default(0)
+  sharePrice         Float    @default(100)
+  valuationMethod    String   @default("EQUITY_ROUND") // EQUITY_ROUND, DCF, MULTIPLE, BOOK_VALUE, MANUAL_REVALUATION
+  leadInvestor       String?  @default("")
+  notes              String?  @db.Text
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model ShareTransaction {
   id                          String   @id @default(uuid())
-  transactionType             String   // PRIMARY_ISSUANCE, SECONDARY_TRANSFER, SHARE_BUYBACK, FOUNDER_ALLOCATION, DILUTION_REBALANCE
-  fromPartnerId               String?  // null if PRIMARY_ISSUANCE or FOUNDER_ALLOCATION
+  transactionType             String // PRIMARY_ISSUANCE, SECONDARY_TRANSFER, SHARE_BUYBACK, FOUNDER_ALLOCATION, DILUTION_REBALANCE
+  fromPartnerId               String? // null if PRIMARY_ISSUANCE or FOUNDER_ALLOCATION
   fromPartnerName             String?  @default("")
-  toPartnerId                 String?  // null if SHARE_BUYBACK
+  toPartnerId                 String? // null if SHARE_BUYBACK
   toPartnerName               String?  @default("")
   shareCount                  Float
   sharePrice                  Float    @default(100)
   totalAmount                 Float    @default(0)
   equityPercentageTransferred Float    @default(0)
-  depositAccountId            String?  // Treasury account if money flowed into/out of company
+  depositAccountId            String? // Treasury account if money flowed into/out of company
   settlementType              String   @default("COMPANY_TREASURY") // COMPANY_TREASURY, PRIVATE_PEER_TO_PEER
   valuationRoundId            String?  @default("")
   date                        DateTime @default(now())
@@ -355,7 +356,7 @@ model ProfitDistribution {
   id                         String   @id @default(uuid())
   periodStart                DateTime
   periodEnd                  DateTime
-  fiscalYear                 String   // e.g. "2082/2083"
+  fiscalYear                 String // e.g. "2082/2083"
   grossRevenue               Float    @default(0)
   netProfit                  Float    @default(0)
   retainedEarningsPercentage Float    @default(20) // % reinvested in business
@@ -373,14 +374,14 @@ model InvestorLiability {
   investorName            String
   contactPhone            String?   @default("")
   contactEmail            String?   @default("")
-  type                    String    // EQUITY_INVESTOR, LONG_TERM_LOAN, SHORT_TERM_BORROWING, CREDIT_LINE
+  type                    String // EQUITY_INVESTOR, LONG_TERM_LOAN, SHORT_TERM_BORROWING, CREDIT_LINE
   loanType                String?   @default("TERM_LOAN") // TERM_LOAN, WORKING_CAPITAL, REVOLVING_CREDIT, PROMISSORY_NOTE
   principalAmount         Float
   principalPaid           Float     @default(0)
   interestPaid            Float     @default(0)
   totalInterestPayable    Float     @default(0)
   amountRepaid            Float     @default(0) // principalPaid + interestPaid
-  outstandingBalance      Float     // remaining principal balance
+  outstandingBalance      Float // remaining principal balance
   interestRate            Float     @default(0) // Annual % APR
   loanTermMonths          Int?      @default(12) // Duration in months
   monthlyInstallment      Float?    @default(0) // Amortized EMI amount
@@ -396,70 +397,70 @@ model InvestorLiability {
 }
 
 model CustomerReturn {
-  id                 String   @id @default(uuid())
-  orderId            String?
-  userId             String?
-  customerName       String
-  customerPhone      String?  @default("")
-  returnDate         DateTime @default(now())
-  items              Json     @default("[]") // [{ productId, name, size, color, quantity, unitPrice, refundAmount, condition: 'RESTOCKABLE' | 'DAMAGED' }]
-  totalRefundAmount  Float    @default(0)
-  vatRefunded        Float    @default(0) // 13% VAT portion reversed
-  refundMethod       String   @default("CASH") // CASH, BANK_TRANSFER, WALLET, STORE_CREDIT
-  refundStatus       String   @default("COMPLETED") // PENDING, COMPLETED, REJECTED
-  inventoryAction    String   @default("RESTOCKED") // RESTOCKED, WRITTEN_OFF_DAMAGED, PARTIAL
-  reason             String   // e.g. "Size mismatch", "Defective/Damaged", "Customer changed mind"
-  notes              String?  @db.Text
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                String   @id @default(uuid())
+  orderId           String?
+  userId            String?
+  customerName      String
+  customerPhone     String?  @default("")
+  returnDate        DateTime @default(now())
+  items             Json     @default("[]") // [{ productId, name, size, color, quantity, unitPrice, refundAmount, condition: 'RESTOCKABLE' | 'DAMAGED' }]
+  totalRefundAmount Float    @default(0)
+  vatRefunded       Float    @default(0) // 13% VAT portion reversed
+  refundMethod      String   @default("CASH") // CASH, BANK_TRANSFER, WALLET, STORE_CREDIT
+  refundStatus      String   @default("COMPLETED") // PENDING, COMPLETED, REJECTED
+  inventoryAction   String   @default("RESTOCKED") // RESTOCKED, WRITTEN_OFF_DAMAGED, PARTIAL
+  reason            String // e.g. "Size mismatch", "Defective/Damaged", "Customer changed mind"
+  notes             String?  @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model SupplierReturn {
-  id                 String   @id @default(uuid())
-  shipmentBatchId    String?
-  supplierName       String
-  returnDate         DateTime @default(now())
-  items              Json     @default("[]") // [{ productId, name, quantity, unitCostPrice, totalDebitCost }]
-  totalDebitAmount   Float    @default(0)
-  vatReversal        Float    @default(0) // 13% Input VAT reversal
-  settlementType     String   @default("CREDIT_NOTE_OFFSET_PAYABLE") // CASH_REFUND, CREDIT_NOTE_OFFSET_PAYABLE
-  status             String   @default("COMPLETED") // PENDING, COMPLETED, CANCELLED
-  reason             String
-  notes              String?  @db.Text
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id               String   @id @default(uuid())
+  shipmentBatchId  String?
+  supplierName     String
+  returnDate       DateTime @default(now())
+  items            Json     @default("[]") // [{ productId, name, quantity, unitCostPrice, totalDebitCost }]
+  totalDebitAmount Float    @default(0)
+  vatReversal      Float    @default(0) // 13% Input VAT reversal
+  settlementType   String   @default("CREDIT_NOTE_OFFSET_PAYABLE") // CASH_REFUND, CREDIT_NOTE_OFFSET_PAYABLE
+  status           String   @default("COMPLETED") // PENDING, COMPLETED, CANCELLED
+  reason           String
+  notes            String?  @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model TaxConfiguration {
-  id                    String   @id @default("default")
-  fiscalYear            String   @default("2082/2083")
-  vatRate               Float    @default(13.0)
-  corporateTaxRate      Float    @default(25.0)
-  taxSlabs              Json     @default("[]")
-  autoDeductAdvanceTax  Boolean  @default(false)
-  updatedAt             DateTime @updatedAt
+  id                   String   @id @default("default")
+  fiscalYear           String   @default("2082/2083")
+  vatRate              Float    @default(13.0)
+  corporateTaxRate     Float    @default(25.0)
+  taxSlabs             Json     @default("[]")
+  autoDeductAdvanceTax Boolean  @default(false)
+  updatedAt            DateTime @updatedAt
 }
 
 model TaxFilingRecord {
-  id                    String   @id @default(uuid())
-  periodType            String   // MONTHLY_VAT, ANNUAL_INCOME_TAX
-  periodKey             String   // e.g. "2026-09" or "FY2082-83"
-  taxableSales          Float    @default(0)
-  outputVat             Float    @default(0)
-  taxablePurchases      Float    @default(0)
-  inputVat              Float    @default(0)
-  netVatPayable         Float    @default(0)
-  grossRevenue          Float    @default(0)
-  totalDeductions       Float    @default(0)
-  depreciationDeduction Float    @default(0)
-  taxableIncome         Float    @default(0)
-  calculatedTax         Float    @default(0)
-  taxPaid               Float    @default(0)
-  status                String   @default("DRAFT") // DRAFT, FILED, PAID
+  id                    String    @id @default(uuid())
+  periodType            String // MONTHLY_VAT, ANNUAL_INCOME_TAX
+  periodKey             String // e.g. "2026-09" or "FY2082-83"
+  taxableSales          Float     @default(0)
+  outputVat             Float     @default(0)
+  taxablePurchases      Float     @default(0)
+  inputVat              Float     @default(0)
+  netVatPayable         Float     @default(0)
+  grossRevenue          Float     @default(0)
+  totalDeductions       Float     @default(0)
+  depreciationDeduction Float     @default(0)
+  taxableIncome         Float     @default(0)
+  calculatedTax         Float     @default(0)
+  taxPaid               Float     @default(0)
+  status                String    @default("DRAFT") // DRAFT, FILED, PAID
   filedDate             DateTime?
-  notes                 String?  @db.Text
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  notes                 String?   @db.Text
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 }
 
 model AccountPayable {
@@ -510,21 +511,21 @@ model AccountReceivable {
 }
 
 model Account {
-  id               String        @id @default(uuid())
-  accountCode      String        @unique
-  accountName      String
-  accountType      String        // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
-  normalBalance    String        // DEBIT, CREDIT
-  parentAccountId  String?
-  parentAccount    Account?      @relation("AccountHierarchy", fields: [parentAccountId], references: [id], onDelete: SetNull)
-  subAccounts      Account[]     @relation("AccountHierarchy")
-  description      String?       @db.Text
-  isSystemAccount  Boolean       @default(false)
-  isActive         Boolean       @default(true)
-  currentBalance   Float         @default(0)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  journalLines     JournalLine[]
+  id              String        @id @default(uuid())
+  accountCode     String        @unique
+  accountName     String
+  accountType     String // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  normalBalance   String // DEBIT, CREDIT
+  parentAccountId String?
+  parentAccount   Account?      @relation("AccountHierarchy", fields: [parentAccountId], references: [id], onDelete: SetNull)
+  subAccounts     Account[]     @relation("AccountHierarchy")
+  description     String?       @db.Text
+  isSystemAccount Boolean       @default(false)
+  isActive        Boolean       @default(true)
+  currentBalance  Float         @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  journalLines    JournalLine[]
 
   @@index([accountType])
   @@index([parentAccountId])
@@ -545,7 +546,7 @@ model AccountingPeriod {
   id           String     @id @default(uuid())
   fiscalYearId String
   fiscalYear   FiscalYear @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
-  periodName   String     // e.g. "2026-09"
+  periodName   String // e.g. "2026-09"
   startDate    DateTime
   endDate      DateTime
   status       String     @default("OPEN") // OPEN, CLOSED
@@ -561,7 +562,7 @@ model JournalEntry {
   transactionDate    DateTime      @default(now())
   fiscalYearId       String?
   accountingPeriodId String?
-  sourceType         String        // SALES_INVOICE, CUSTOMER_PAYMENT, PURCHASE_BILL, SUPPLIER_PAYMENT, SALES_RETURN, SUPPLIER_RETURN, EXPENSE_PAYMENT, ASSET_PURCHASE, ASSET_DEPRECIATION, LOAN_DISBURSEMENT, LOAN_REPAYMENT, CAPITAL_INJECTION, SHARE_BUYBACK, PROFIT_DISTRIBUTION, MANUAL_JOURNAL, PERIOD_CLOSING
+  sourceType         String // SALES_INVOICE, CUSTOMER_PAYMENT, PURCHASE_BILL, SUPPLIER_PAYMENT, SALES_RETURN, SUPPLIER_RETURN, EXPENSE_PAYMENT, ASSET_PURCHASE, ASSET_DEPRECIATION, LOAN_DISBURSEMENT, LOAN_REPAYMENT, CAPITAL_INJECTION, SHARE_BUYBACK, PROFIT_DISTRIBUTION, MANUAL_JOURNAL, PERIOD_CLOSING
   sourceId           String?
   idempotencyKey     String?       @unique // Unique index to prevent duplicate posting
   referenceNumber    String?       @default("")
@@ -611,30 +612,30 @@ model JournalLine {
 // ============================================================
 
 model Manufacturer {
-  id                   String   @id @default(uuid())
+  id                   String    @id @default(uuid())
   name                 String
-  email                String   @unique
-  password             String   // bcrypt hashed
+  email                String    @unique
+  password             String // bcrypt hashed
   phone                String
-  city                 String   // e.g. "Kathmandu", "Pokhara", "Biratnagar"
-  address              String?  @db.Text
-  qualityRating        Float    @default(5.0)     // Dynamic 1.0–5.0 calculated from customer product reviews
-  ratingCount          Int      @default(0)       // Total customer reviews applied
-  isActive             Boolean  @default(true)
-  isAvailable          Boolean  @default(true)    // manufacturer can toggle
+  city                 String // e.g. "Kathmandu", "Pokhara", "Biratnagar"
+  address              String?   @db.Text
+  qualityRating        Float     @default(5.0) // Dynamic 1.0–5.0 calculated from customer product reviews
+  ratingCount          Int       @default(0) // Total customer reviews applied
+  isActive             Boolean   @default(true)
+  isAvailable          Boolean   @default(true) // manufacturer can toggle
   // Contract fields
-  contractStatus       String   @default("ACTIVE") // ACTIVE | SUSPENDED | TERMINATED
-  contractDocUrl       String?  @db.Text           // uploaded PDF URL (Cloudinary)
+  contractStatus       String    @default("ACTIVE") // ACTIVE | SUSPENDED | TERMINATED
+  contractDocUrl       String?   @db.Text // uploaded PDF URL (Cloudinary)
   contractStartDate    DateTime?
   contractExpiryDate   DateTime?
-  agreementNotes       String?  @db.Text
+  agreementNotes       String?   @db.Text
   // Performance counters (updated by system)
-  totalOrdersFulfilled Int      @default(0)
-  onTimeCount          Int      @default(0)
-  defectCount          Int      @default(0)
-  rejectionCount       Int      @default(0)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  totalOrdersFulfilled Int       @default(0)
+  onTimeCount          Int       @default(0)
+  defectCount          Int       @default(0)
+  rejectionCount       Int       @default(0)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   inventory   ManufacturerInventory[]
   assignments OrderAssignment[]
@@ -645,21 +646,21 @@ model Manufacturer {
 
 // Per-manufacturer inventory for each product
 model ManufacturerInventory {
-  id                String       @id @default(uuid())
+  id                String   @id @default(uuid())
   manufacturerId    String
   productId         String
-  productName       String       // denormalized for display speed
-  quantity          Int          @default(0)   // actual physical stock (sum of variants)
-  reservedQty       Int          @default(0)   // reserved for accepted/in-progress orders
-  variantsStock     Json         @default("[]") // [{ size, color, quantity, reservedQty }]
-  proposedCostPrice Float?       // manufacturer proposed supply cost price
-  agreedCostPrice   Float?       // admin accepted agreed supply cost price
-  priceStatus       String       @default("PENDING") // PENDING | APPROVED | REJECTED
-  priceNote         String?      @db.Text
-  adminFeedback     String?      @db.Text
-  lastUpdated       DateTime     @updatedAt
+  productName       String // denormalized for display speed
+  quantity          Int      @default(0) // actual physical stock (sum of variants)
+  reservedQty       Int      @default(0) // reserved for accepted/in-progress orders
+  variantsStock     Json     @default("[]") // [{ size, color, quantity, reservedQty }]
+  proposedCostPrice Float? // manufacturer proposed supply cost price
+  agreedCostPrice   Float? // admin accepted agreed supply cost price
+  priceStatus       String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  priceNote         String?  @db.Text
+  adminFeedback     String?  @db.Text
+  lastUpdated       DateTime @updatedAt
 
-  manufacturer      Manufacturer @relation(fields: [manufacturerId], references: [id], onDelete: Cascade)
+  manufacturer Manufacturer @relation(fields: [manufacturerId], references: [id], onDelete: Cascade)
 
   @@unique([manufacturerId, productId])
   @@index([productId])
@@ -668,40 +669,198 @@ model ManufacturerInventory {
 
 // Order assignment from Allocation Engine to a Manufacturer
 model OrderAssignment {
-  id              String       @id @default(uuid())
-  orderId         String       @unique
+  id              String    @id @default(uuid())
+  orderId         String    @unique
   manufacturerId  String
-  status          String       @default("PENDING_ACCEPTANCE")
+  status          String    @default("PENDING_ACCEPTANCE")
   // PENDING_ACCEPTANCE | ACCEPTED | MANUFACTURING | QUALITY_CHECK | PACKED | READY_FOR_PICKUP | PICKED_UP | REJECTED
-  assignedAt      DateTime     @default(now())
+  assignedAt      DateTime  @default(now())
   acceptedAt      DateTime?
   manufacturingAt DateTime?
   qualityCheckAt  DateTime?
   packedAt        DateTime?
   readyAt         DateTime?
   pickedUpAt      DateTime?
-  notes           String?      @db.Text
+  notes           String?   @db.Text
   rejectionReason String?
 
-  manufacturer    Manufacturer  @relation(fields: [manufacturerId], references: [id])
+  manufacturer Manufacturer @relation(fields: [manufacturerId], references: [id])
 
   @@index([orderId])
   @@index([manufacturerId])
   @@index([status])
 }
 
+// One carrier package and NCM submission for an order.
+model DeliveryOrder {
+  id                     String          @id @default(uuid())
+  orderId                String          @unique
+  assignmentId           String?
+  manufacturerId         String
+  state                  String          @default("READY_TO_DELIVER")
+  deliveryType           String          @default("Door2Door")
+  packageVersion         Int             @default(1)
+  packageWeight          Float           @default(1)
+  packageDescription     String?         @db.Text
+  originBranchName       String
+  destinationBranchName  String
+  itemAmount             Float           @default(0)
+  customerDeliveryCharge Float           @default(0)
+  ncmDeliveryCharge      Float?
+  codAmount              Float           @default(0)
+  ncmOrderId             Int?            @unique
+  vendorReference        String          @unique
+  ncmStatus              String?
+  ncmPaymentStatus       String?
+  lastSyncedAt           DateTime?
+  nextSyncAt             DateTime?
+  syncFailureCount       Int             @default(0)
+  lastSyncError          String?         @db.Text
+  readyAt                DateTime        @default(now())
+  ncmCreatedAt           DateTime?
+  pickedUpAt             DateTime?
+  deliveredAt            DateTime?
+  returnedAt             DateTime?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  order                  Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  events                 DeliveryEvent[]
+
+  @@index([state])
+  @@index([manufacturerId, state])
+  @@index([nextSyncAt])
+}
+
+model DeliveryEvent {
+  id              String        @id @default(uuid())
+  deliveryOrderId String
+  orderId         String
+  source          String
+  eventType       String
+  fromState       String?
+  toState         String?
+  ncmStatus       String?
+  payloadJson     Json?
+  actorId         String?
+  occurredAt      DateTime      @default(now())
+  idempotencyKey  String        @unique
+  deliveryOrder   DeliveryOrder @relation(fields: [deliveryOrderId], references: [id], onDelete: Cascade)
+
+  @@index([deliveryOrderId, occurredAt])
+  @@index([orderId, occurredAt])
+}
+
+model DeliveryComment {
+  id              String    @id @default(uuid())
+  deliveryOrderId String?
+  ncmOrderId      Int
+  comments        String    @db.Text
+  addedBy         String?
+  addedAt         DateTime?
+  payloadJson     Json
+  eventKey        String    @unique
+  createdAt       DateTime  @default(now())
+
+  @@index([deliveryOrderId, createdAt])
+  @@index([ncmOrderId, createdAt])
+}
+
+model NcmRequestAttempt {
+  id              String    @id @default(uuid())
+  deliveryOrderId String
+  operation       String
+  idempotencyKey  String    @unique
+  attemptNumber   Int
+  requestUrl      String
+  requestJson     Json?
+  responseJson    Json?
+  httpStatus      Int?
+  result          String
+  errorCode       String?
+  errorMessage    String?   @db.Text
+  startedAt       DateTime  @default(now())
+  finishedAt      DateTime?
+  nextRetryAt     DateTime?
+
+  @@index([deliveryOrderId, operation])
+  @@index([result, nextRetryAt])
+}
+
+model NcmWebhookEvent {
+  id               String    @id @default(uuid())
+  eventKey         String    @unique
+  event            String?
+  orderId          String?
+  orderIds         Json?
+  status           String?
+  timestamp        DateTime?
+  payloadJson      Json
+  receivedAt       DateTime  @default(now())
+  processedAt      DateTime?
+  processingStatus String    @default("RECEIVED")
+  processingError  String?   @db.Text
+
+  @@index([orderId])
+  @@index([processingStatus, receivedAt])
+}
+
+model DeliveryReturn {
+  id                   String    @id @default(uuid())
+  deliveryOrderId      String    @unique
+  orderId              String
+  manufacturerId       String
+  state                String    @default("RETURN_REQUESTED")
+  returnReason         String
+  ncmReturnComment     String?   @db.Text
+  ncmReturnRequestedAt DateTime?
+  trackingReference    String?
+  receivedAt           DateTime?
+  inspectedAt          DateTime?
+  inspectionResult     String?
+  restockDecision      String?
+  notes                String?   @db.Text
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([manufacturerId, state])
+  @@index([orderId])
+}
+
+model DeliveryFinancialSettlement {
+  id                  String    @id @default(uuid())
+  deliveryOrderId     String    @unique
+  ncmOrderId          Int?
+  codExpected         Float     @default(0)
+  codCollected        Float     @default(0)
+  deliveryFeeExpected Float     @default(0)
+  deliveryFeeActual   Float     @default(0)
+  otherAdjustments    Float     @default(0)
+  manufacturerPayable Float     @default(0)
+  platformReceivable  Float     @default(0)
+  ncmTicketId         Int?
+  settlementState     String    @default("PENDING")
+  settledAt           DateTime?
+  journalEntryId      String?
+  varianceReason      String?   @db.Text
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([settlementState])
+  @@index([ncmOrderId])
+}
+
 // Operating, Marketing & Overhead Expenses Model
 model OperatingExpense {
   id            String   @id @default(uuid())
   title         String
-  category      String   // MARKETING | RENT | ELECTRICITY | SALARIES | UTILITIES | MISCELLANEOUS | MAINTENANCE
-  amount        Float    // Total expense amount
+  category      String // MARKETING | RENT | ELECTRICITY | SALARIES | UTILITIES | MISCELLANEOUS | MAINTENANCE
+  amount        Float // Total expense amount
   isVatBill     Boolean  @default(false)
   vatAmount     Float    @default(0) // Input VAT embedded if 13% VAT bill provided
   date          DateTime @default(now())
   paymentMethod String   @default("CASH") // CASH | BANK_TRANSFER | QR_PAYMENT | CREDIT
-  vendorName    String?  // Vendor / landlord / service provider
-  invoiceNumber String?  // Bill reference
+  vendorName    String? // Vendor / landlord / service provider
+  invoiceNumber String? // Bill reference
   notes         String?  @db.Text
   createdBy     String   @default("ADMIN")
   createdAt     DateTime @default(now())
@@ -711,4 +870,3 @@ model OperatingExpense {
   @@index([date])
   @@index([isVatBill])
 }
-
